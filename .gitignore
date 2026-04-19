@@ -1,0 +1,57 @@
+# venv / python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# secrets & local config
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# DATA — never commit real bank statements or anything with PII
+data/raw/
+data/interim/
+data/processed/
+Banking transactions/
+*.pdf
+*.csv
+*.xlsx
+*.xls
+*.zip
+!tests/fixtures/**
+
+# models / artifacts / local DBs
+*.pkl
+*.joblib
+models/
+*.duckdb
+*.sqlite3
+*.db
+local.db
+
+# os / editor / tooling caches
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cursor local state (keep committed rules under .cursor/rules/)
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
