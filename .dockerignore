@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.git/
+data/raw/
+data/interim/
+data/processed/
+Banking transactions/
+*.duckdb
+*.sqlite3
+local.db
+models/
+requirements-ml.txt
+tests/
+.env

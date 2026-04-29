@@ -1,0 +1,132 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finunderwrite"
+version = "0.1.0"
+description = "Bank-agnostic banking transaction intelligence platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas",
+    "numpy",
+    "pyyaml",
+    "python-dateutil",
+    "pydantic>=2",
+    "pydantic-settings",
+    "loguru",
+    "typer",
+    "pdfplumber",
+    "camelot-py",
+    "opencv-python-headless",
+    "pytesseract",
+    "pdf2image",
+    "pillow",
+    "rapidfuzz",
+    "scikit-learn",
+    "joblib",
+    "httpx",
+    "tenacity",
+    "sqlalchemy>=2",
+    "alembic",
+    "psycopg[binary]",
+    "duckdb",
+    "fastapi",
+    "uvicorn[standard]",
+    "gunicorn",
+    "python-multipart",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "types-python-dateutil",
+    "types-PyYAML",
+]
+# Offline-only; never installed on the web dyno. See requirements-ml.txt.
+ml = ["sdv", "synthcity", "spacy", "sentence-transformers"]
+
+[project.scripts]
+finunderwrite = "finunderwrite.cli:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "config"]
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+ignore = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+mypy_path = "src"
+packages = ["finunderwrite"]
+exclude = ["tests/fixtures"]
+
+[[tool.mypy.overrides]]
+module = [
+    "camelot.*",
+    "pdfplumber.*",
+    "pytesseract.*",
+    "pdf2image.*",
+    "cv2.*",
+    "sklearn.*",
+    "joblib.*",
+    "pandas.*",
+    "duckdb.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["finunderwrite.synthetic.generate"]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-ra --strict-markers --cov=finunderwrite --cov-report=term-missing"
+markers = [
+    "requires_tesseract: needs tesseract binary on PATH",
+    "requires_poppler: needs poppler binary on PATH",
+]
+
+[tool.coverage.run]
+source = ["src/finunderwrite"]
+branch = true
+omit = [
+    # Offline-only ML module; requires sdv/torch that are never installed here.
+    "src/finunderwrite/synthetic/generate.py",
+    # Require native binaries (tesseract/poppler) and real PDFs; covered by
+    # integration testing rather than the unit-coverage gate.
+    "src/finunderwrite/parser/pdf_native.py",
+    "src/finunderwrite/parser/pdf_scanned.py",
+    "src/finunderwrite/parser/ocr/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 75
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

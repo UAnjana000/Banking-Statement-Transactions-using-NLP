@@ -1,0 +1,14 @@
+# OFFLINE-ONLY machine-learning stack for synthetic data generation.
+# NEVER installed on the web dyno (see requirements.txt for the serving runtime).
+# Install locally with: pip install -r requirements-ml.txt
+#
+# NOTE: sdv is BUSL-licensed (Business Source License) — verify its terms before
+# any commercial use. synthcity (Apache-2.0) is the benchmarked alternative.
+
+sdv
+synthcity
+
+# Parked here (offline-only, currently unused by the serving code); these pull
+# heavy deps (torch) and must stay out of the web runtime.
+spacy
+sentence-transformers

@@ -1,0 +1,49 @@
+# Lightweight serving + core processing runtime (installed on the web dyno).
+# The heavy ML stack (sdv, synthcity, torch, spacy, sentence-transformers) lives
+# in requirements-ml.txt and must NEVER be installed here.
+
+# core
+pandas
+numpy
+pyyaml
+python-dateutil
+pydantic>=2
+pydantic-settings
+loguru
+typer
+
+# parsing (CSV + native PDF sync; OCR wrappers small, binaries via apt in Docker)
+pdfplumber
+camelot-py
+opencv-python-headless
+pytesseract
+pdf2image
+pillow
+rapidfuzz
+scikit-learn
+joblib
+
+# enrichment
+httpx
+tenacity
+
+# persistence
+sqlalchemy>=2
+alembic
+psycopg[binary]
+duckdb
+
+# web
+fastapi
+uvicorn[standard]
+gunicorn
+python-multipart
+
+# dev
+pytest
+pytest-cov
+ruff
+mypy
+pre-commit
+types-python-dateutil
+types-PyYAML
