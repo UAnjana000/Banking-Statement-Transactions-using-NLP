@@ -16,3 +16,6 @@ repos:
           - types-python-dateutil
           - types-PyYAML
         args: [--config-file=pyproject.toml]
+        # Use package discovery from pyproject; passing individual paths makes
+        # config/settings.py resolve as both "settings" and "config.settings".
+        pass_filenames: false
