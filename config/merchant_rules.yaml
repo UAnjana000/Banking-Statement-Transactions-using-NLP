@@ -1,0 +1,124 @@
+# Merchant extraction rules. Consumed by src/finunderwrite/merchant/extract.py.
+# Parsing is driven entirely by this file (no hardcoded merchant literals in code).
+
+# Payment mode detection from the description prefix. First match wins.
+payment_modes:
+  - mode: UPI
+    regex: "(?i)^\\s*UPI\\b"
+  - mode: IMPS
+    regex: "(?i)^\\s*IMPS\\b"
+  - mode: NEFT
+    regex: "(?i)^\\s*NEFT\\b"
+  - mode: RTGS
+    regex: "(?i)^\\s*RTGS\\b"
+  - mode: ACH
+    regex: "(?i)^\\s*(ACH|NACH|ECS)\\b"
+  - mode: POS
+    regex: "(?i)^\\s*POS\\b"
+  - mode: ATM
+    regex: "(?i)^\\s*ATM\\b"
+
+# Tokens stripped from the description before picking a merchant candidate.
+# These remove payment rails, routing directions, references, and noise.
+strip_tokens:
+  - "(?i)\\bUPI\\b"
+  - "(?i)\\bIMPS\\b"
+  - "(?i)\\bNEFT\\b"
+  - "(?i)\\bRTGS\\b"
+  - "(?i)\\bACH\\b"
+  - "(?i)\\bNACH\\b"
+  - "(?i)\\bECS\\b"
+  - "(?i)\\bPOS\\b"
+  - "(?i)\\bATM\\b"
+  - "(?i)\\bDR\\b"
+  - "(?i)\\bCR\\b"
+  - "(?i)\\bPAYMENT\\b"
+  - "(?i)\\bTXN\\b"
+  - "(?i)\\bREF\\b"
+  - "(?i)\\bRRN\\b"
+  - "(?i)\\bORDER\\b"
+  - "(?i)\\bINDIA\\b"
+  - "(?i)\\bPVT\\b"
+  - "(?i)\\bLTD\\b"
+  - "(?i)\\bLIMITED\\b"
+  - "\\d{6,}"                     # long numeric references / RRNs / account ids
+
+# Known bank / gateway routing tokens that are never merchants.
+routing_tokens:
+  - HDFC
+  - SBIN
+  - SBI
+  - ICIC
+  - ICICI
+  - AXIS
+  - KKBK
+  - KOTAK
+  - PUNB
+  - PNB
+  - YESB
+  - IDFB
+  - PYTM
+  - RAZORPAY
+  - RAZP
+  - BILLDESK
+  - CCAVENUE
+  - PAYU
+
+# UPI VPA handle regexes (the "@bank" suffix). The handle is stripped; the
+# local-part before "@" is kept as a merchant candidate.
+upi_handle_regex:
+  - "(?i)@ok[a-z]+"
+  - "(?i)@paytm"
+  - "(?i)@ybl"
+  - "(?i)@axl"
+  - "(?i)@ibl"
+  - "(?i)@apl"
+  - "(?i)@[a-z0-9.-]+"           # generic fallback for any @handle
+
+# Canonical merchant names. Extracted candidates are fuzzy-matched to collapse
+# variants (e.g. AMZN -> Amazon) using rapidfuzz.
+canonical_merchants:
+  - Amazon
+  - Flipkart
+  - Zepto
+  - Blinkit
+  - Swiggy
+  - Zomato
+  - Netflix
+  - Spotify
+  - BigBasket
+  - Uber
+  - Ola
+  - Myntra
+  - Jio
+  - Airtel
+  - PhonePe
+  - Paytm
+  - Google Pay
+  - Apple
+  - Microsoft
+  - IRCTC
+  - MakeMyTrip
+  - Dominos
+  - McDonalds
+  - Starbucks
+  - Reliance
+  - DMart
+  - HDFC Bank
+  - LIC
+
+# Explicit alias -> canonical overrides applied before fuzzy matching.
+aliases:
+  AMZN: Amazon
+  AMAZON PAY: Amazon
+  AMAZONPAY: Amazon
+  AMAZON IN: Amazon
+  FKRT: Flipkart
+  FLIPKART INTERNET: Flipkart
+  SWIGGYUPI: Swiggy
+  ZOMATO ONLINE: Zomato
+  NETFLIX COM: Netflix
+  GPAY: Google Pay
+  GOOGLEPAY: Google Pay
+  MMT: MakeMyTrip
+  BOOKMYSHOW: BookMyShow

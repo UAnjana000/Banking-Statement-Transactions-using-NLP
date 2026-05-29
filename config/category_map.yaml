@@ -1,0 +1,95 @@
+# Category rules. Consumed by src/finunderwrite/merchant/categorize.py (Tier 1)
+# and used as seed training data for the Tier 2 scikit-learn classifier.
+# The 21 canonical categories are fixed; do not invent new ones downstream.
+
+categories:
+  - category: Food
+    keywords: [swiggy, zomato, restaurant, dominos, mcdonalds, kfc, starbucks, cafe, food]
+    mcc: ["5812", "5814"]
+  - category: Groceries
+    keywords: [bigbasket, blinkit, zepto, dmart, grofers, grocery, supermarket, instamart]
+    mcc: ["5411"]
+  - category: Fuel
+    keywords: [petrol, diesel, fuel, hpcl, iocl, bpcl, indianoil, shell]
+    mcc: ["5541", "5542"]
+  - category: Healthcare
+    keywords: [hospital, pharmacy, apollo, medplus, clinic, diagnostic, medical, pharmeasy]
+    mcc: ["8011", "5912", "8062"]
+  - category: Travel
+    keywords: [irctc, makemytrip, goibibo, uber, ola, flight, airline, indigo, redbus, mmt]
+    mcc: ["4511", "4111", "4121", "7011"]
+  - category: Entertainment
+    keywords: [netflix, spotify, hotstar, bookmyshow, pvr, inox, prime video, cinema]
+    mcc: ["7832", "7841"]
+  - category: Utilities
+    keywords: [electricity, water bill, gas bill, bescom, utility, power, adani electricity]
+    mcc: ["4900"]
+  - category: Investments
+    keywords: [zerodha, groww, upstox, mutual fund, sip, nps, stock, demat, coin]
+    mcc: ["6211"]
+  - category: Salary
+    keywords: [salary, payroll, sal credit, wages, stipend]
+    mcc: []
+  - category: Rent
+    keywords: [rent, nobroker, rentpay, house rent, landlord]
+    mcc: ["6513"]
+  - category: Education
+    keywords: [school, college, university, tuition, byjus, unacademy, coursera, udemy, fees]
+    mcc: ["8220", "8299"]
+  - category: Insurance
+    keywords: [insurance, lic, premium, policybazaar, hdfc life, term plan]
+    mcc: ["6300"]
+  - category: Shopping
+    keywords: [amazon, flipkart, myntra, ajio, nykaa, shopping, mall, reliance trends]
+    mcc: ["5311", "5651", "5999"]
+  - category: Transfers
+    keywords: [transfer, upi transfer, neft, imps, rtgs, sent to, received from, self]
+    mcc: []
+  - category: ATM
+    keywords: [atm, cash withdrawal, atw, cash wdl]
+    mcc: ["6011"]
+  - category: Loan
+    keywords: [loan, disbursement, personal loan, home loan, lending]
+    mcc: []
+  - category: EMI
+    keywords: [emi, installment, instalment, bajaj finserv, nach emi]
+    mcc: []
+  - category: Government
+    keywords: [government, govt, municipal, passport, challan, gst payment]
+    mcc: ["9399"]
+  - category: Tax
+    keywords: [tax, income tax, tds, advance tax, gst, cbdt]
+    mcc: ["9311"]
+  - category: Subscription
+    keywords: [subscription, membership, renewal, prime, recurring]
+    mcc: ["5968"]
+  - category: Telecom
+    keywords: [jio, airtel, vodafone, vi, bsnl, recharge, mobile bill, broadband, dth]
+    mcc: ["4814", "4899"]
+  - category: Others
+    keywords: [misc, other, sundry]
+    mcc: []
+
+# Canonical merchant -> category overrides (highest-priority Tier 1 signal).
+merchant_overrides:
+  Amazon: Shopping
+  Flipkart: Shopping
+  Myntra: Shopping
+  Zepto: Groceries
+  Blinkit: Groceries
+  BigBasket: Groceries
+  DMart: Groceries
+  Swiggy: Food
+  Zomato: Food
+  Dominos: Food
+  McDonalds: Food
+  Starbucks: Food
+  Netflix: Entertainment
+  Spotify: Entertainment
+  Uber: Travel
+  Ola: Travel
+  IRCTC: Travel
+  MakeMyTrip: Travel
+  Jio: Telecom
+  Airtel: Telecom
+  LIC: Insurance

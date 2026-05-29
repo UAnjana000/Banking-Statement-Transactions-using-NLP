@@ -1,0 +1,59 @@
+debit:
+  - withdrawal
+  - dr
+  - debit
+  - debit amount
+  - amount withdrawn
+  - withdraw
+  - paid out
+  - outflow
+
+credit:
+  - deposit
+  - cr
+  - credit
+  - credit amount
+  - amount deposited
+  - paid in
+  - inflow
+
+date:
+  - date
+  - txn date
+  - transaction date
+  - value date
+  - posting date
+  - entry date
+  - trans date
+
+balance:
+  - balance
+  - closing balance
+  - running balance
+  - available balance
+  - current balance
+  - closing bal
+
+description:
+  - description
+  - narration
+  - particulars
+  - details
+  - transaction details
+  - remarks
+
+reference_number:
+  - reference
+  - ref no
+  - reference number
+  - cheque no
+  - chq no
+  - utr
+  - transaction id
+  - txn id
+
+amount:
+  - amount
+  - txn amount
+  - transaction amount
+  - signed amount
