@@ -1,0 +1,29 @@
+# Render blueprint for the finunderwrite web service.
+# NOTE: Render's built-in Postgres expires after 30 days on the free tier and the
+# web filesystem is EPHEMERAL. Point DATABASE_URL at an EXTERNAL managed Postgres
+# (Neon / Supabase) so all real data survives restarts and cold starts.
+
+services:
+  - type: web
+    name: finunderwrite
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: PYTHONPATH
+        value: /app/src
+      - key: FINUNDERWRITE_LOG_LEVEL
+        value: INFO
+      - key: FINUNDERWRITE_LLM_ENRICH_ENABLED
+        value: "false"
+      - key: FINUNDERWRITE_ENRICHER
+        value: "null"
+      # Set this to an EXTERNAL Postgres URL (Neon/Supabase), e.g.
+      # postgresql+psycopg://user:pass@host/dbname
+      - key: FINUNDERWRITE_DATABASE_URL
+        sync: false
