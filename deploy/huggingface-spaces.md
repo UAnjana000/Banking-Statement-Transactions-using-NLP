@@ -2,34 +2,36 @@
 
 Hugging Face Spaces offers a free Docker CPU tier (2 vCPU / 16 GB RAM) that fits this app.
 
-## One-time setup
+## Important
 
-1. Create a free account at https://huggingface.co/join
-2. Open https://huggingface.co/new-space
-3. Fill in:
-   - **Space name:** `FinUnderWrite` (or any name)
-   - **SDK:** Docker
-   - **Hardware:** CPU Basic (free)
-   - **Visibility:** Public (or Private)
-4. After the empty Space is created, push this GitHub repo into it (or duplicate files):
+Do **not** follow the Gradio/`app.py`/torch template Hugging Face shows for new Spaces.
+FinUnderWrite is a **Docker + FastAPI** app (`sdk: docker`, port `7860`). No Gradio file is needed.
 
-```bash
-# From this project root (after `huggingface-cli login`)
-pip install -U huggingface_hub
-huggingface-cli login
-huggingface-cli upload YOUR_HF_USERNAME/FinUnderWrite . . \
-  --repo-type=space \
-  --exclude=".venv/*" \
-  --exclude="Banking transactions/*" \
-  --exclude=".git/*" \
-  --exclude="*.db" \
-  --exclude="local.db"
+Your Space `UAnjana000/AIML` was created as Gradio — uploading this repo’s README switches it to Docker.
+
+## Fast path (recommended)
+
+From the project root in PowerShell:
+
+```powershell
+.\deploy\push-to-hf-space.ps1
+# or: .\deploy\push-to-hf-space.ps1 -SpaceId "UAnjana000/AIML"
 ```
 
-Or in the Space **Settings → Repository**, connect / mirror your GitHub repo `UAnjana000/Banking-Statement-Transactions-using-NLP` if you prefer git sync.
+That will:
 
-5. Confirm the Space README YAML has `sdk: docker` and `app_port: 7860` (already at the top of this repo's `README.md`).
-6. Wait for the build. Open the Space URL — UI at `/`, health at `/health`, docs at `/docs`.
+1. Prompt you to log in to Hugging Face (token from https://huggingface.co/settings/tokens — enable **Write**)
+2. Upload this project into the Space
+3. Set `sdk: docker` via the README YAML so Spaces builds the `Dockerfile`
+
+Then open https://huggingface.co/spaces/UAnjana000/AIML and wait for the Docker build (several minutes).
+
+## Manual setup (new Space)
+
+1. https://huggingface.co/new-space → SDK **Docker** (not Gradio), hardware **CPU Basic**
+2. Run `.\deploy\push-to-hf-space.ps1 -SpaceId "UAnjana000/YourSpaceName"`
+3. Confirm README YAML has `sdk: docker` and `app_port: 7860`
+4. Open the Space URL — UI `/`, health `/health`, docs `/docs`
 
 ## Database (optional)
 
