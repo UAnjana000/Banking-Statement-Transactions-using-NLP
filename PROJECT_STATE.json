@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "project": "FinUnderWrite",
-  "last_updated": "2026-07-17T23:59:00Z",
+  "last_updated": "2026-07-17T23:40:00Z",
   "canonical_schema_version": "1.0",
   "contracts": {
     "CanonicalTransaction": [
@@ -173,8 +173,8 @@
       "entrypoints": ["src/finunderwrite/api/app.py", "src/finunderwrite/api/routers/"],
       "depends_on": ["normalize", "profile", "features", "persistence"],
       "test_coverage": "tests/unit/test_api.py",
-      "last_touched": "2026-07-17T23:59:00Z",
-      "notes": "Upload cap default 50 MB; 413 detail reports MB. Health exposes max_upload_mb. Deploy target is Koyeb (Dockerfile + /health check); see deploy/koyeb-init.sh."
+      "last_touched": "2026-07-17T23:40:00Z",
+      "notes": "Upload cap default 50 MB. Deploy target is free Hugging Face Spaces Docker (app_port 7860, UID 1000); see deploy/huggingface-spaces.md. SQLite by default; optional Postgres secret."
     },
     {
       "name": "web_ui",
@@ -227,7 +227,7 @@
       "id": "ADR-006",
       "date": "2026-07-17",
       "choice": "Split dependencies: lightweight requirements.txt for the web/serving runtime (no torch/sdv/sentence-transformers/spacy) and requirements-ml.txt for the offline ML stack.",
-      "rationale": "Keeps the Koyeb web service within a small-instance memory budget and torch-free; heavy ML is offline-only."
+      "rationale": "Keeps the Spaces/web image torch-free and within free-tier memory; heavy ML is offline-only."
     },
     {
       "id": "ADR-007",
@@ -245,13 +245,13 @@
       "id": "ADR-009",
       "date": "2026-07-17",
       "choice": "Alembic migrations with DATABASE_URL (sqlite:///local.db dev, Postgres via psycopg for deploy); DuckDB as a read-only local analytics layer.",
-      "rationale": "External managed Postgres survives Koyeb's ephemeral filesystem; DuckDB gives local analytics without touching the operational store."
+      "rationale": "External managed Postgres survives ephemeral host filesystems; DuckDB gives local analytics without touching the operational store. Spaces can use SQLite for demos."
     },
     {
       "id": "ADR-010",
       "date": "2026-07-17",
       "choice": "Serve a static HTML/CSS/JS dashboard from FastAPI (/ and /static) instead of a separate Node frontend.",
-      "rationale": "Keeps the Koyeb image single-process and torch-free; UI talks to existing JSON endpoints without a build step."
+      "rationale": "Keeps the serving image single-process and torch-free; UI talks to existing JSON endpoints without a build step."
     },
     {
       "id": "ADR-011",
@@ -263,14 +263,20 @@
       "id": "ADR-012",
       "date": "2026-07-17",
       "choice": "Deploy the Docker web service on Koyeb (GitHub + Dockerfile builder, HTTP health check /health) instead of Render.",
-      "rationale": "Same container image works unchanged; Koyeb git deploy + free instance fits the lightweight FastAPI runtime. Operational data stays in external Postgres."
+      "rationale": "Superseded by ADR-013 after Koyeb/Render free deploys failed for this project."
+    },
+    {
+      "id": "ADR-013",
+      "date": "2026-07-17",
+      "choice": "Deploy on free Hugging Face Spaces Docker (app_port 7860, UID 1000). SQLite by default; optional Neon/Supabase Postgres via Space secret.",
+      "rationale": "Spaces free CPU Basic (2 vCPU / 16 GB) is a reliable zero-cost Docker host for FastAPI demos when Render/Koyeb are unavailable."
     }
   ],
   "open_questions": [],
   "synthetic_datasets": [],
   "next_actions": [
     "Install requirements-ml.txt offline and run 'finunderwrite synth-generate' to populate + register datasets",
-    "Push to GitHub, set FINUNDERWRITE_DATABASE_URL to external Postgres, deploy on Koyeb (control panel or deploy/koyeb-init.sh)",
+    "Create a Hugging Face Docker Space and sync this repo (see deploy/huggingface-spaces.md)",
     "Future prompts: risk scoring, fraud detection, RAG"
   ]
 }

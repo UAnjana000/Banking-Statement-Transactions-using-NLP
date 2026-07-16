@@ -1,29 +1,34 @@
-# finunderwrite serving image (lightweight: no torch/sdv/sentence-transformers).
+# FinUnderWrite serving image for Hugging Face Spaces (and local Docker).
+# Free Spaces CPU Basic: listen on 7860, run as UID 1000. No torch/sdv.
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app/src \
+    HOME=/home/user \
+    PORT=7860 \
+    WEB_CONCURRENCY=1
 
-# System deps for native/scanned PDF handling (OCR runs offline, but wrappers
-# and native PDF parsing still benefit from these binaries).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         poppler-utils \
         libgl1 \
         libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 user
 
 WORKDIR /app
 
-# Install ONLY the lightweight serving runtime (never requirements-ml.txt).
-COPY requirements.txt ./
+COPY --chown=user:user requirements.txt ./
 RUN python -m pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY --chown=user:user . .
 
-# Apply DB migrations at boot, then serve. 1-2 workers for a small Koyeb instance.
-CMD ["sh", "-c", "alembic upgrade head && gunicorn finunderwrite.api:app -k uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-2} --bind 0.0.0.0:${PORT:-8000} --timeout 120"]
+USER user
+EXPOSE 7860
+
+# Migrations then serve. Spaces sets/expects app_port 7860; override with $PORT elsewhere.
+CMD ["sh", "-c", "alembic upgrade head && gunicorn finunderwrite.api:app -k uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-1} --bind 0.0.0.0:${PORT:-7860} --timeout 120"]

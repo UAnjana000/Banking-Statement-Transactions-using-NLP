@@ -1,5 +1,5 @@
 # OFFLINE-ONLY machine-learning stack for synthetic data generation.
-# NEVER installed on the Koyeb web service (see requirements.txt for the serving runtime).
+# NEVER installed on the Spaces web image (see requirements.txt for the serving runtime).
 # Install locally with: pip install -r requirements-ml.txt
 #
 # NOTE: sdv is BUSL-licensed (Business Source License) — verify its terms before

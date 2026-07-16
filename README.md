@@ -1,3 +1,15 @@
+---
+title: FinUnderWrite
+emoji: 📈
+colorFrom: green
+colorTo: yellow
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Bank statement intelligence for underwriting
+---
+
 # FinUnderWrite
 
 Bank-agnostic banking transaction intelligence platform (`finunderwrite` package). Ingests statements in arbitrary formats (PDF native/scanned, CSV, XLSX), normalizes them into a frozen `CanonicalTransaction` schema, and builds toward underwriting features and financial profiles.
@@ -127,49 +139,35 @@ alembic upgrade head        # apply migrations
 alembic revision --autogenerate -m "change"   # create a new migration
 ```
 
-## Deployment (Koyeb)
+## Deployment (Hugging Face Spaces — free)
 
-1. Push this repo to GitHub (do **not** commit `.venv`, `.env`, or real bank statements).
-2. Create an external Postgres database (Neon or Supabase) and copy its connection URL. Prefer the SQLAlchemy form `postgresql+psycopg://user:pass@host/db`.
-3. In [Koyeb](https://app.koyeb.com/), create a **Web Service** from GitHub:
-   - Builder: **Dockerfile** (`./Dockerfile`)
-   - Port: `8000` (HTTP), route `/` → `8000`
-   - Health check: HTTP `GET /health` on port `8000`
-   - Instance: Free (or Nano/Micro if you need more RAM for large PDF ingest)
-4. Set environment variables in the Koyeb service settings:
+Hosted on **Hugging Face Spaces** free Docker CPU (no Render/Koyeb). Step-by-step: [`deploy/huggingface-spaces.md`](deploy/huggingface-spaces.md).
 
-| Variable | Value |
-|---|---|
-| `PORT` | `8000` |
-| `WEB_CONCURRENCY` | `2` |
-| `PYTHONPATH` | `/app/src` |
-| `FINUNDERWRITE_LOG_LEVEL` | `INFO` |
-| `FINUNDERWRITE_LLM_ENRICH_ENABLED` | `false` |
-| `FINUNDERWRITE_ENRICHER` | `null` |
-| `FINUNDERWRITE_DATABASE_URL` | your external Postgres URL |
+1. Create a Space at https://huggingface.co/new-space → SDK **Docker**, hardware **CPU Basic** (free).
+2. Upload/sync this repo into the Space (or connect the GitHub remote). The YAML block at the top of this README sets `sdk: docker` and `app_port: 7860`.
+3. Wait for the Docker build. Open the Space URL — UI at `/`, health at `/health`, docs at `/docs`.
 
-5. Deploy. The UI is at `/`; API docs at `/docs`.
+Optional env / secrets in Space settings:
 
-### CLI alternative
-
-Install the [Koyeb CLI](https://www.koyeb.com/docs/build-and-deploy/cli/installation), run `koyeb login`, then:
-
-```bash
-export FINUNDERWRITE_DATABASE_URL='postgresql+psycopg://user:pass@host/db'
-sh deploy/koyeb-init.sh
-```
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `7860` | Spaces app port |
+| `WEB_CONCURRENCY` | `1` | Keep low on free CPU |
+| `FINUNDERWRITE_DATABASE_URL` | SQLite in-container | Set to Neon/Supabase Postgres if you need persistence across sleeps |
+| `FINUNDERWRITE_LLM_ENRICH_ENABLED` | `false` | Keep off on free tier |
+| `FINUNDERWRITE_ENRICHER` | `null` | Keep null on free tier |
 
 Notes:
 
-- `Dockerfile` builds a lightweight `python:3.12-slim` image, installs `tesseract-ocr` + `poppler-utils`, installs ONLY `requirements.txt` (no torch/sdv/sentence-transformers), and serves with gunicorn + uvicorn workers bound to `$PORT`.
-- Koyeb's filesystem is ephemeral — keep operational data in external Postgres (Neon/Supabase).
-- `.koyebignore` skips redeploys for docs-only commits (README, PROJECT_STATE, etc.).
-- Offline vs serving split: OCR, model training, enrichment batch, and synthetic generation are offline jobs; the web service only parses CSV/native PDFs synchronously and serves pre-computed results.
+- `Dockerfile` targets Spaces (UID 1000, port 7860) and still works locally with Docker.
+- Free Spaces sleep when idle; first request after sleep is a cold start.
+- Offline vs serving split unchanged: OCR / training / synth stay offline; the Space serves CSV/native PDF ingest + profiles.
 
 ## Build Log
 
 <!-- Newest entries first -->
 
+### 2026-07-17 — deploy: Switch hosting to free Hugging Face Spaces Docker (port 7860, UID 1000); drop Render/Koyeb
 ### 2026-07-17 — deploy: Switch hosting from Render to Koyeb (Dockerfile + CLI init script, health check /health)
 ### 2026-07-17 — web_ui: Polish FinUnderWrite dashboard (Newsreader/Outfit, ledger atmosphere, motion); ignore .cursor; title-only commit hygiene
 ### 2026-07-17 — web_ui/api/parser: Brand FinUnderWrite; 50 MB upload cap with MB-threshold errors; PDF concat hardened for duplicate camelot columns; Windows temp cleanup no longer masks ingest errors

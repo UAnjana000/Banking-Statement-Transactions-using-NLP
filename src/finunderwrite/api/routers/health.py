@@ -1,4 +1,4 @@
-"""Liveness endpoint (required for the Koyeb HTTP health check)."""
+"""Liveness endpoint for platform health checks (Hugging Face Spaces / local)."""
 
 from __future__ import annotations
 

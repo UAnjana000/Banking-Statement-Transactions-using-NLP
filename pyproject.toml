@@ -48,7 +48,7 @@ dev = [
     "types-python-dateutil",
     "types-PyYAML",
 ]
-# Offline-only; never installed on the Koyeb web service. See requirements-ml.txt.
+# Offline-only; never installed on the Spaces web image. See requirements-ml.txt.
 ml = ["sdv", "synthcity", "spacy", "sentence-transformers"]
 
 [project.scripts]
