@@ -61,7 +61,7 @@ async def upload_statement(
     try:
         profile = profile_file(tmp_path)
 
-        # Scanned PDFs are NOT OCR'd synchronously (would time out on the free dyno).
+        # Scanned PDFs are NOT OCR'd synchronously (would time out on a free instance).
         if profile.file_type == "pdf" and profile.pdf_kind == "scanned":
             return JSONResponse(
                 status_code=202,
@@ -74,7 +74,7 @@ async def upload_statement(
                     "transactions_ingested": 0,
                     "note": (
                         "Scanned PDF queued for offline OCR batch; "
-                        "OCR is not run synchronously on the serving dyno."
+                        "OCR is not run synchronously on the serving instance."
                     ),
                 },
             )

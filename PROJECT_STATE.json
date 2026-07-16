@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "project": "FinUnderWrite",
-  "last_updated": "2026-07-17T23:55:00Z",
+  "last_updated": "2026-07-17T23:59:00Z",
   "canonical_schema_version": "1.0",
   "contracts": {
     "CanonicalTransaction": [
@@ -173,8 +173,8 @@
       "entrypoints": ["src/finunderwrite/api/app.py", "src/finunderwrite/api/routers/"],
       "depends_on": ["normalize", "profile", "features", "persistence"],
       "test_coverage": "tests/unit/test_api.py",
-      "last_touched": "2026-07-17T23:55:00Z",
-      "notes": "Upload cap default 50 MB; 413 detail reports MB. Health exposes max_upload_mb. Temp cleanup swallows WinError 32. HTTPException not masked by catch-all handler."
+      "last_touched": "2026-07-17T23:59:00Z",
+      "notes": "Upload cap default 50 MB; 413 detail reports MB. Health exposes max_upload_mb. Deploy target is Koyeb (Dockerfile + /health check); see deploy/koyeb-init.sh."
     },
     {
       "name": "web_ui",
@@ -227,7 +227,7 @@
       "id": "ADR-006",
       "date": "2026-07-17",
       "choice": "Split dependencies: lightweight requirements.txt for the web/serving runtime (no torch/sdv/sentence-transformers/spacy) and requirements-ml.txt for the offline ML stack.",
-      "rationale": "Keeps the Render web dyno within a 512 MB budget and torch-free; heavy ML is offline-only."
+      "rationale": "Keeps the Koyeb web service within a small-instance memory budget and torch-free; heavy ML is offline-only."
     },
     {
       "id": "ADR-007",
@@ -239,32 +239,38 @@
       "id": "ADR-008",
       "date": "2026-07-17",
       "choice": "Synthetic generation is offline-only with an import-time torch/sdv guard. SDV is BUSL-licensed (verify terms before commercial use); SynthCity (Apache-2.0) is the benchmarked alternative.",
-      "rationale": "Prevents the ML stack from ever loading on the web dyno and flags the licensing constraint."
+      "rationale": "Prevents the ML stack from ever loading on the web service and flags the licensing constraint."
     },
     {
       "id": "ADR-009",
       "date": "2026-07-17",
       "choice": "Alembic migrations with DATABASE_URL (sqlite:///local.db dev, Postgres via psycopg for deploy); DuckDB as a read-only local analytics layer.",
-      "rationale": "External managed Postgres survives Render's ephemeral filesystem; DuckDB gives local analytics without touching the operational store."
+      "rationale": "External managed Postgres survives Koyeb's ephemeral filesystem; DuckDB gives local analytics without touching the operational store."
     },
     {
       "id": "ADR-010",
       "date": "2026-07-17",
       "choice": "Serve a static HTML/CSS/JS dashboard from FastAPI (/ and /static) instead of a separate Node frontend.",
-      "rationale": "Keeps the Render image single-process and torch-free; UI talks to existing JSON endpoints without a build step."
+      "rationale": "Keeps the Koyeb image single-process and torch-free; UI talks to existing JSON endpoints without a build step."
     },
     {
       "id": "ADR-011",
       "date": "2026-07-17",
       "choice": "Default max_upload_bytes = 50 MB; user-facing oversize errors and /health report the threshold in MB.",
       "rationale": "Common multi-page bank PDFs are ~30 MB; byte thresholds are opaque in the UI."
+    },
+    {
+      "id": "ADR-012",
+      "date": "2026-07-17",
+      "choice": "Deploy the Docker web service on Koyeb (GitHub + Dockerfile builder, HTTP health check /health) instead of Render.",
+      "rationale": "Same container image works unchanged; Koyeb git deploy + free instance fits the lightweight FastAPI runtime. Operational data stays in external Postgres."
     }
   ],
   "open_questions": [],
   "synthetic_datasets": [],
   "next_actions": [
     "Install requirements-ml.txt offline and run 'finunderwrite synth-generate' to populate + register datasets",
-    "Push to GitHub, set FINUNDERWRITE_DATABASE_URL to external Postgres, deploy via render.yaml",
+    "Push to GitHub, set FINUNDERWRITE_DATABASE_URL to external Postgres, deploy on Koyeb (control panel or deploy/koyeb-init.sh)",
     "Future prompts: risk scoring, fraud detection, RAG"
   ]
 }

@@ -1,4 +1,4 @@
-"""Liveness endpoint (required for the Render health check)."""
+"""Liveness endpoint (required for the Koyeb HTTP health check)."""
 
 from __future__ import annotations
 

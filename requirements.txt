@@ -1,4 +1,4 @@
-# Lightweight serving + core processing runtime (installed on the web dyno).
+# Lightweight serving + core processing runtime (installed on the Koyeb web service).
 # The heavy ML stack (sdv, synthcity, torch, spacy, sentence-transformers) lives
 # in requirements-ml.txt and must NEVER be installed here.
 

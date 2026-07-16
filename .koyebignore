@@ -1,0 +1,7 @@
+# Docs/config-only changes should not trigger a Koyeb redeploy.
+README.md
+PROJECT_STATE.json
+.env.example
+.pre-commit-config.yaml
+.cursor/
+docs/

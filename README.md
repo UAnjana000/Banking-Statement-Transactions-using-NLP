@@ -127,29 +127,54 @@ alembic upgrade head        # apply migrations
 alembic revision --autogenerate -m "change"   # create a new migration
 ```
 
-## Deployment (Render)
+## Deployment (Koyeb)
 
 1. Push this repo to GitHub (do **not** commit `.venv`, `.env`, or real bank statements).
 2. Create an external Postgres database (Neon or Supabase) and copy its connection URL. Prefer the SQLAlchemy form `postgresql+psycopg://user:pass@host/db`.
-3. In [Render](https://render.com), create a Blueprint from `render.yaml`, or a Docker web service pointing at this repo's `Dockerfile`.
-4. Set `FINUNDERWRITE_DATABASE_URL` in the Render dashboard (marked `sync: false` in the blueprint so you paste it once).
-5. Deploy. Health check is `GET /health`. The UI is at `/`.
+3. In [Koyeb](https://app.koyeb.com/), create a **Web Service** from GitHub:
+   - Builder: **Dockerfile** (`./Dockerfile`)
+   - Port: `8000` (HTTP), route `/` → `8000`
+   - Health check: HTTP `GET /health` on port `8000`
+   - Instance: Free (or Nano/Micro if you need more RAM for large PDF ingest)
+4. Set environment variables in the Koyeb service settings:
+
+| Variable | Value |
+|---|---|
+| `PORT` | `8000` |
+| `WEB_CONCURRENCY` | `2` |
+| `PYTHONPATH` | `/app/src` |
+| `FINUNDERWRITE_LOG_LEVEL` | `INFO` |
+| `FINUNDERWRITE_LLM_ENRICH_ENABLED` | `false` |
+| `FINUNDERWRITE_ENRICHER` | `null` |
+| `FINUNDERWRITE_DATABASE_URL` | your external Postgres URL |
+
+5. Deploy. The UI is at `/`; API docs at `/docs`.
+
+### CLI alternative
+
+Install the [Koyeb CLI](https://www.koyeb.com/docs/build-and-deploy/cli/installation), run `koyeb login`, then:
+
+```bash
+export FINUNDERWRITE_DATABASE_URL='postgresql+psycopg://user:pass@host/db'
+sh deploy/koyeb-init.sh
+```
 
 Notes:
 
-- `Dockerfile` builds a lightweight `python:3.12-slim` image, installs `tesseract-ocr` + `poppler-utils`, installs ONLY `requirements.txt` (no torch/sdv/sentence-transformers), and serves with gunicorn + uvicorn workers bound to `$PORT` (1-2 workers for a 512 MB budget).
-- Render's built-in Postgres expires after 30 days and the web filesystem is ephemeral — keep operational data in external Postgres.
-- Free dynos cold-start (spin down when idle); the first request after idle is slow.
+- `Dockerfile` builds a lightweight `python:3.12-slim` image, installs `tesseract-ocr` + `poppler-utils`, installs ONLY `requirements.txt` (no torch/sdv/sentence-transformers), and serves with gunicorn + uvicorn workers bound to `$PORT`.
+- Koyeb's filesystem is ephemeral — keep operational data in external Postgres (Neon/Supabase).
+- `.koyebignore` skips redeploys for docs-only commits (README, PROJECT_STATE, etc.).
 - Offline vs serving split: OCR, model training, enrichment batch, and synthetic generation are offline jobs; the web service only parses CSV/native PDFs synchronously and serves pre-computed results.
 
 ## Build Log
 
 <!-- Newest entries first -->
 
+### 2026-07-17 — deploy: Switch hosting from Render to Koyeb (Dockerfile + CLI init script, health check /health)
 ### 2026-07-17 — web_ui: Polish FinUnderWrite dashboard (Newsreader/Outfit, ledger atmosphere, motion); ignore .cursor; title-only commit hygiene
 ### 2026-07-17 — web_ui/api/parser: Brand FinUnderWrite; 50 MB upload cap with MB-threshold errors; PDF concat hardened for duplicate camelot columns; Windows temp cleanup no longer masks ingest errors
 ### 2026-07-17 — web_ui: Static dashboard at `/` (upload, ledger, profile, features) served by FastAPI; gitignore hardened against venv/PII
-### 2026-07-17 - api/deploy: Lightweight FastAPI service (health/statements/transactions/profile/features/synthetic), Alembic migrations, Postgres/DuckDB persistence, Dockerfile + render.yaml, request-id logging, env validation, coverage gate
+### 2026-07-17 - api/deploy: Lightweight FastAPI service (health/statements/transactions/profile/features/synthetic), Alembic migrations, Postgres/DuckDB persistence, Dockerfile + Koyeb deploy, request-id logging, env validation, coverage gate
 ### 2026-07-17 - features/synthetic: Deterministic underwriting feature table and offline-only synthetic generation (GaussianCopula/CTGAN/TVAE) with import guard, fidelity + NN-distance privacy checks, requirements-ml.txt split
 ### 2026-07-17 - behaviour/profile: Deterministic behaviour summary, recurring detection (cadence clustering), and FinancialProfile builder with known-pattern synthetic fixtures
 ### 2026-07-17 - merchant: Merchant extraction, hybrid categorization (rules+sklearn, optional LLM), and defensive cache-first enrichment with SQLAlchemy persistence

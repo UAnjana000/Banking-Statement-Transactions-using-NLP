@@ -25,5 +25,5 @@ RUN python -m pip install --upgrade pip \
 
 COPY . .
 
-# Apply DB migrations at boot, then serve. 1-2 workers for a 512 MB budget.
+# Apply DB migrations at boot, then serve. 1-2 workers for a small Koyeb instance.
 CMD ["sh", "-c", "alembic upgrade head && gunicorn finunderwrite.api:app -k uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-2} --bind 0.0.0.0:${PORT:-8000} --timeout 120"]
