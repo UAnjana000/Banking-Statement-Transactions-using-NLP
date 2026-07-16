@@ -62,6 +62,8 @@ class NativePdfParser(Parser):
             msg = f"No tables extracted from native PDF: {path.name}"
             raise ValueError(msg)
 
+        frames = [_ensure_unique_columns(f) for f in frames]
+        frames = _coalesce_compatible_frames(frames)
         combined = pd.concat(frames, ignore_index=True)
         combined = _normalize_signed_amount_column(combined)
 
@@ -94,7 +96,7 @@ class NativePdfParser(Parser):
                 if df.shape[0] >= 2:
                     df.columns = df.iloc[0]
                     df = df.iloc[1:].reset_index(drop=True)
-                    frames.append(df)
+                    frames.append(_ensure_unique_columns(df))
             if frames:
                 logger.info(
                     "camelot ({}) extracted {} table(s) from {}",
@@ -106,13 +108,87 @@ class NativePdfParser(Parser):
         return frames
 
 
+def _unique_column_names(columns: list[object] | pd.Index) -> list[str]:
+    """Make column labels unique so pandas concat/reindex does not fail."""
+    seen: dict[str, int] = {}
+    result: list[str] = []
+    for raw in columns:
+        name = str(raw).strip() if raw is not None else ""
+        if not name or name.lower() == "nan":
+            name = "col"
+        # Collapse camelot/pdfplumber multi-line header cells for matching.
+        name = " ".join(name.replace("\n", " ").split())
+        count = seen.get(name, 0)
+        result.append(name if count == 0 else f"{name}_{count}")
+        seen[name] = count + 1
+    return result
+
+
+def _ensure_unique_columns(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    out.columns = _unique_column_names(out.columns)
+    return out
+
+
+def _frame_score(df: pd.DataFrame) -> int:
+    """Prefer wide transaction-like tables over account-summary stubs."""
+    col_text = " ".join(str(c).lower() for c in df.columns)
+    score = int(df.shape[0]) * 10 + int(df.shape[1])
+    keywords = (
+        "date",
+        "debit",
+        "credit",
+        "balance",
+        "description",
+        "particular",
+        "narration",
+        "withdrawal",
+        "deposit",
+        "ref",
+    )
+    score += sum(100 for key in keywords if key in col_text)
+    if "account summary" in col_text or "available balance" in col_text:
+        score -= 500
+    return score
+
+
+def _coalesce_compatible_frames(frames: list[pd.DataFrame]) -> list[pd.DataFrame]:
+    """Keep the best-scoring set of frames that share a column width."""
+    if len(frames) <= 1:
+        return frames
+
+    by_width: dict[int, list[pd.DataFrame]] = {}
+    for frame in frames:
+        by_width.setdefault(frame.shape[1], []).append(frame)
+
+    best_group: list[pd.DataFrame] | None = None
+    best_score = -(10**9)
+    for group in by_width.values():
+        group_score = sum(_frame_score(f) for f in group)
+        if group_score > best_score:
+            best_score = group_score
+            best_group = group
+
+    assert best_group is not None
+    # Align column names to the highest-scoring frame in the group.
+    best_group = sorted(best_group, key=_frame_score, reverse=True)
+    header = list(best_group[0].columns)
+    aligned: list[pd.DataFrame] = []
+    for frame in best_group:
+        if list(frame.columns) != header and frame.shape[1] == len(header):
+            frame = frame.copy()
+            frame.columns = header
+        aligned.append(frame)
+    return aligned
+
+
 def _table_to_dataframe(table: list[list[str | None]]) -> pd.DataFrame | None:
     cleaned: list[list[str]] = []
     for row in table:
         cleaned.append([str(cell or "").strip() for cell in row])
     if len(cleaned) < 2:
         return None
-    header = cleaned[0]
+    header = _unique_column_names(cleaned[0])
     rows = cleaned[1:]
     if not any(header):
         return None

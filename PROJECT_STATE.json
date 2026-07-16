@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "project": "finunderwrite",
-  "last_updated": "2026-07-17T23:30:00Z",
+  "project": "FinUnderWrite",
+  "last_updated": "2026-07-17T23:55:00Z",
   "canonical_schema_version": "1.0",
   "contracts": {
     "CanonicalTransaction": [
@@ -70,9 +70,9 @@
         "src/finunderwrite/parser/pdf_scanned.py"
       ],
       "depends_on": ["inventory"],
-      "test_coverage": "tests/unit/test_parser_tabular.py",
-      "last_touched": "2026-07-17T19:50:00Z",
-      "notes": "Batch runner collects per-file errors. ScannedPdfParser lazy-imports OCR deps."
+      "test_coverage": "tests/unit/test_parser_tabular.py, tests/unit/test_parser_pdf_native.py",
+      "last_touched": "2026-07-17T23:45:00Z",
+      "notes": "Native PDF: uniquify columns + coalesce camelot frames before concat (avoids InvalidIndexError on duplicate blank headers)."
     },
     {
       "name": "schema_detection",
@@ -173,8 +173,8 @@
       "entrypoints": ["src/finunderwrite/api/app.py", "src/finunderwrite/api/routers/"],
       "depends_on": ["normalize", "profile", "features", "persistence"],
       "test_coverage": "tests/unit/test_api.py",
-      "last_touched": "2026-07-17T23:30:00Z",
-      "notes": "Request-ID middleware, global exception handler, upload limits. Scanned PDFs return 202 (offline OCR). No torch/sdv in runtime. Serves static dashboard at /."
+      "last_touched": "2026-07-17T23:55:00Z",
+      "notes": "Upload cap default 50 MB; 413 detail reports MB. Health exposes max_upload_mb. Temp cleanup swallows WinError 32. HTTPException not masked by catch-all handler."
     },
     {
       "name": "web_ui",
@@ -187,8 +187,8 @@
       ],
       "depends_on": ["api"],
       "test_coverage": "tests/unit/test_api.py::test_ui_index_and_static_assets",
-      "last_touched": "2026-07-17T23:30:00Z",
-      "notes": "Static SPA mounted by FastAPI; no separate frontend build. Brand-led sea/copper visual language."
+      "last_touched": "2026-07-17T23:55:00Z",
+      "notes": "Brand FinUnderWrite with Newsreader/Outfit, ledger atmosphere, and workspace reveal motion. Dropzone shows max upload MB from /health."
     }
   ],
   "status_enum": ["not_started", "in_progress", "implemented", "tested", "stable"],
@@ -252,6 +252,12 @@
       "date": "2026-07-17",
       "choice": "Serve a static HTML/CSS/JS dashboard from FastAPI (/ and /static) instead of a separate Node frontend.",
       "rationale": "Keeps the Render image single-process and torch-free; UI talks to existing JSON endpoints without a build step."
+    },
+    {
+      "id": "ADR-011",
+      "date": "2026-07-17",
+      "choice": "Default max_upload_bytes = 50 MB; user-facing oversize errors and /health report the threshold in MB.",
+      "rationale": "Common multi-page bank PDFs are ~30 MB; byte thresholds are opaque in the UI."
     }
   ],
   "open_questions": [],

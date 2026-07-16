@@ -3,20 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>finunderwrite</title>
+    <title>FinUnderWrite</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600;6..72,700&family=Outfit:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <div class="atmosphere" aria-hidden="true"></div>
+    <div class="atmosphere" aria-hidden="true">
+      <div class="atmosphere-plane"></div>
+      <div class="atmosphere-ledger"></div>
+    </div>
 
     <header class="topbar">
-      <a class="brand-mark" href="/">finunderwrite</a>
+      <a class="brand-mark" href="/">FinUnderWrite</a>
       <div class="status-pill" id="health-status" title="API health">
         <span class="status-dot" aria-hidden="true"></span>
         <span id="health-label">checking</span>
@@ -25,7 +28,7 @@
 
     <main>
       <section class="hero" id="hero">
-        <p class="brand-hero">finunderwrite</p>
+        <p class="brand-hero">FinUnderWrite</p>
         <h1>Statement intelligence for underwriting</h1>
         <p class="lede">
           Upload a bank statement. We normalize it, categorize merchants, and
@@ -51,8 +54,9 @@
               accept=".csv,.xlsx,.xls,.pdf"
               required
             />
+            <span class="dropzone-kicker">Statement file</span>
             <span class="dropzone-title">Drop a statement here</span>
-            <span class="dropzone-hint">CSV, XLSX, or PDF · max size from server config</span>
+            <span class="dropzone-hint" id="dropzone-hint">CSV, XLSX, or PDF · max 50 MB</span>
             <span class="file-name" id="file-name"></span>
           </label>
           <div class="cta-row">
@@ -65,6 +69,10 @@
       </section>
 
       <section class="workspace" id="workspace" hidden>
+        <div class="workspace-bar">
+          <p class="workspace-eyebrow">Underwriting workspace</p>
+          <p class="workspace-customer" id="workspace-customer"></p>
+        </div>
         <nav class="tabs" role="tablist" aria-label="Workspace">
           <button class="tab is-active" data-panel="transactions" role="tab" aria-selected="true">
             Transactions

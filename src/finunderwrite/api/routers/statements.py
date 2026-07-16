@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -24,6 +25,14 @@ router = APIRouter(tags=["statements"])
 _ALLOWED_SUFFIXES = {".csv", ".xlsx", ".xls", ".pdf"}
 
 
+def _format_upload_limit(max_bytes: int) -> str:
+    mb = max_bytes / (1024 * 1024)
+    if mb >= 1:
+        text = f"{mb:.0f}" if mb == int(mb) else f"{mb:.1f}"
+        return f"{text} MB"
+    return f"{max_bytes} bytes"
+
+
 @router.post("/statements", response_model=StatementUploadResponse)
 async def upload_statement(
     file: UploadFile = File(...),
@@ -41,10 +50,12 @@ async def upload_statement(
     if len(content) > settings.max_upload_bytes:
         raise HTTPException(
             status_code=413,
-            detail=f"Upload exceeds limit of {settings.max_upload_bytes} bytes",
+            detail=f"Upload exceeds limit of {_format_upload_limit(settings.max_upload_bytes)}",
         )
 
-    tmp_path = Path(tempfile.gettempdir()) / f"finuw_{customer_id}_{filename}"
+    fd, tmp_name = tempfile.mkstemp(prefix=f"finuw_{customer_id}_", suffix=suffix)
+    os.close(fd)
+    tmp_path = Path(tmp_name)
     tmp_path.write_bytes(content)
 
     try:
@@ -89,4 +100,8 @@ async def upload_statement(
         logger.exception("Statement processing failed")
         raise HTTPException(status_code=500, detail="Statement processing failed") from exc
     finally:
-        tmp_path.unlink(missing_ok=True)
+        # Parsers (camelot/pdfplumber) may still hold the file on Windows.
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Could not delete temp upload {}: {}", tmp_path, exc)

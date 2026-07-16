@@ -11,6 +11,7 @@ from pydantic import BaseModel
 class HealthResponse(BaseModel):
     status: str
     version: str
+    max_upload_mb: float | None = None
 
 
 class ErrorResponse(BaseModel):

@@ -2,6 +2,7 @@
   const healthStatus = document.getElementById("health-status");
   const healthLabel = document.getElementById("health-label");
   const versionLabel = document.getElementById("version-label");
+  const dropzoneHint = document.getElementById("dropzone-hint");
   const form = document.getElementById("upload-form");
   const fileInput = document.getElementById("file-input");
   const fileName = document.getElementById("file-name");
@@ -10,12 +11,14 @@
   const uploadNote = document.getElementById("upload-note");
   const customerInput = document.getElementById("customer-id");
   const workspace = document.getElementById("workspace");
+  const workspaceCustomer = document.getElementById("workspace-customer");
   const txnBody = document.getElementById("txn-body");
   const txnMeta = document.getElementById("txn-meta");
   const profileGrid = document.getElementById("profile-grid");
   const featuresGrid = document.getElementById("features-grid");
 
   let activeCustomer = customerInput.value.trim() || "demo";
+  let maxUploadMb = 50;
 
   function setNote(message, kind) {
     uploadNote.textContent = message;
@@ -72,6 +75,12 @@
     }
   }
 
+  function formatMb(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  }
+
   async function checkHealth() {
     try {
       const resp = await fetch("/health");
@@ -81,6 +90,13 @@
       healthStatus.classList.remove("is-bad");
       healthLabel.textContent = "online";
       versionLabel.textContent = `v${body.version}`;
+      const mbLabel = formatMb(body.max_upload_mb);
+      if (mbLabel) {
+        maxUploadMb = Number(body.max_upload_mb);
+        if (dropzoneHint) {
+          dropzoneHint.textContent = `CSV, XLSX, or PDF · max ${mbLabel} MB`;
+        }
+      }
     } catch {
       healthStatus.classList.add("is-bad");
       healthStatus.classList.remove("is-ok");
@@ -104,7 +120,7 @@
         <td>${row.description || "—"}</td>
         <td class="num">${money(row.debit)}</td>
         <td class="num">${money(row.credit)}</td>
-        <td>${row.category || "—"}</td>
+        <td class="category">${row.category || "—"}</td>
       `;
       txnBody.append(tr);
     }
@@ -113,6 +129,9 @@
   async function loadWorkspace(customerId) {
     activeCustomer = customerId;
     workspace.hidden = false;
+    if (workspaceCustomer) {
+      workspaceCustomer.textContent = `Customer ${customerId}`;
+    }
 
     const txnResp = await fetch(
       `/transactions?customer_id=${encodeURIComponent(customerId)}&limit=200`
@@ -195,6 +214,13 @@
     const file = fileInput.files && fileInput.files[0];
     if (!customerId || !file) {
       setNote("Choose a customer ID and a statement file.", "is-error");
+      return;
+    }
+
+    const limitBytes = maxUploadMb * 1024 * 1024;
+    if (file.size > limitBytes) {
+      const mbLabel = formatMb(maxUploadMb) || String(maxUploadMb);
+      setNote(`Upload exceeds limit of ${mbLabel} MB`, "is-error");
       return;
     }
 

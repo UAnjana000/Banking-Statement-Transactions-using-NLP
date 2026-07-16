@@ -36,16 +36,24 @@ def test_health(client: TestClient) -> None:
 def test_ui_index_and_static_assets(client: TestClient) -> None:
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "finunderwrite" in resp.text
+    assert "FinUnderWrite" in resp.text
     assert "text/html" in resp.headers.get("content-type", "")
 
     css = client.get("/static/styles.css")
     assert css.status_code == 200
-    assert "Fraunces" in css.text
+    assert "Newsreader" in css.text
 
     js = client.get("/static/app.js")
     assert js.status_code == 200
     assert "/statements" in js.text
+
+
+def test_health_includes_upload_limit_mb(client: TestClient) -> None:
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["max_upload_mb"] >= 1
 
 
 def test_upload_csv_and_list_transactions(client: TestClient) -> None:
@@ -75,6 +83,16 @@ def test_upload_size_limit(client: TestClient, isolated_settings) -> None:  # ty
     files = {"file": ("big.csv", io.BytesIO(b"x" * 100), "text/csv")}
     resp = client.post("/statements", files=files, data={"customer_id": "c"})
     assert resp.status_code == 413
+    assert "bytes" in resp.json()["detail"]
+
+
+def test_upload_size_limit_reported_in_mb(client: TestClient, isolated_settings) -> None:  # type: ignore[no-untyped-def]
+    isolated_settings.max_upload_bytes = 2 * 1024 * 1024
+    files = {"file": ("big.csv", io.BytesIO(b"x" * (2 * 1024 * 1024 + 1)), "text/csv")}
+    resp = client.post("/statements", files=files, data={"customer_id": "c"})
+    assert resp.status_code == 413
+    assert resp.json()["detail"] == "Upload exceeds limit of 2 MB"
+    assert "bytes" not in resp.json()["detail"]
 
 
 def test_profile_and_features_after_upload(client: TestClient) -> None:

@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     # Persistence
     database_url: str | None = None
 
-    # API / web
-    max_upload_bytes: int = 10 * 1024 * 1024  # 10 MB upload cap
+    # API / web — 50 MB covers multi-page bank statement PDFs (~30 MB common)
+    max_upload_bytes: int = 50 * 1024 * 1024
     api_default_customer_id: str = "default"
 
     # Merchant extraction
@@ -89,6 +89,11 @@ class Settings(BaseSettings):
             msg = "max_upload_bytes must be positive"
             raise ValueError(msg)
         return value
+
+    @property
+    def max_upload_mb(self) -> float:
+        """Upload cap in megabytes (for user-facing messages)."""
+        return round(self.max_upload_bytes / (1024 * 1024), 1)
 
     @property
     def resolved_database_url(self) -> str:

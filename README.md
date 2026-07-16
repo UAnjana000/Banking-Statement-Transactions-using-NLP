@@ -1,6 +1,6 @@
-# finunderwrite
+# FinUnderWrite
 
-Bank-agnostic banking transaction intelligence platform. Ingests statements in arbitrary formats (PDF native/scanned, CSV, XLSX), normalizes them into a frozen `CanonicalTransaction` schema, and builds toward underwriting features and financial profiles.
+Bank-agnostic banking transaction intelligence platform (`finunderwrite` package). Ingests statements in arbitrary formats (PDF native/scanned, CSV, XLSX), normalizes them into a frozen `CanonicalTransaction` schema, and builds toward underwriting features and financial profiles.
 
 ## Pipeline
 
@@ -146,6 +146,8 @@ Notes:
 
 <!-- Newest entries first -->
 
+### 2026-07-17 — web_ui: Polish FinUnderWrite dashboard (Newsreader/Outfit, ledger atmosphere, motion); ignore .cursor; title-only commit hygiene
+### 2026-07-17 — web_ui/api/parser: Brand FinUnderWrite; 50 MB upload cap with MB-threshold errors; PDF concat hardened for duplicate camelot columns; Windows temp cleanup no longer masks ingest errors
 ### 2026-07-17 — web_ui: Static dashboard at `/` (upload, ledger, profile, features) served by FastAPI; gitignore hardened against venv/PII
 ### 2026-07-17 - api/deploy: Lightweight FastAPI service (health/statements/transactions/profile/features/synthetic), Alembic migrations, Postgres/DuckDB persistence, Dockerfile + render.yaml, request-id logging, env validation, coverage gate
 ### 2026-07-17 - features/synthetic: Deterministic underwriting feature table and offline-only synthetic generation (GaussianCopula/CTGAN/TVAE) with import guard, fidelity + NN-distance privacy checks, requirements-ml.txt split

@@ -51,7 +51,5 @@ Thumbs.db
 *.swp
 *.swo
 
-# Cursor local state (keep committed rules under .cursor/rules/)
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
+# Cursor local state / rules (never commit)
+.cursor/

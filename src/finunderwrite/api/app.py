@@ -44,7 +44,7 @@ def create_app() -> FastAPI:
         yield
 
     app = FastAPI(
-        title="finunderwrite",
+        title="FinUnderWrite",
         version=__version__,
         description="Bank-agnostic banking transaction intelligence API",
         lifespan=lifespan,
@@ -96,6 +96,9 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exc_handler(request: Request, exc: Exception) -> JSONResponse:
+        # BaseHTTPMiddleware can surface HTTPException as a bare Exception.
+        if isinstance(exc, StarletteHTTPException):
+            return await http_exc_handler(request, exc)
         logger.exception("Unhandled error")
         return JSONResponse(
             status_code=500,
