@@ -1,20 +1,16 @@
-"""Tests for native PDF table coalescing helpers and text fallback."""
+"""Tests for native PDF table coalescing helpers and camelot batching."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
-from finunderwrite.inventory.profiler import profile_file
 from finunderwrite.parser.pdf_native import (
-    NativePdfParser,
     _coalesce_compatible_frames,
     _ensure_unique_columns,
+    _page_batches,
     _unique_column_names,
+    camelot_batch_pages,
     camelot_fallback_enabled,
-    max_sync_pdf_pages,
-    parse_statement_text,
 )
 
 
@@ -57,36 +53,16 @@ def test_camelot_fallback_can_be_disabled(monkeypatch) -> None:  # type: ignore[
     assert camelot_fallback_enabled() is False
 
 
-def test_max_sync_pdf_pages_defaults_low_on_render(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.delenv("FINUNDERWRITE_MAX_SYNC_PDF_PAGES", raising=False)
-    monkeypatch.setenv("RENDER", "true")
-    assert max_sync_pdf_pages() == 8
+def test_page_batches() -> None:
+    assert _page_batches(12, 5) == ["1-5", "6-10", "11-12"]
+    assert _page_batches(3, 5) == ["1-3"]
+    assert _page_batches(5, 5) == ["1-5"]
+    assert _page_batches(0, 5) == []
+    assert _page_batches(1, 1) == ["1-1"]
 
 
-def test_parse_statement_text_sbi_style() -> None:
-    text = (
-        "State Bank of India - Synthetic Statement\n"
-        "Txn Date Description Debit Credit Balance\n"
-        "15/01/2025 UPI-SWIGGY 250.00 4750.00\n"
-        "16/01/2025 NEFT-SALARY 50000.00 54750.00\n"
-    )
-    df = parse_statement_text(text)
-    assert df is not None
-    assert len(df) == 2
-    assert df.iloc[0]["Description"] == "UPI-SWIGGY"
-    assert df.iloc[0]["Debit"] == "250.00"
-    assert df.iloc[0]["Credit"] == ""
-    assert df.iloc[1]["Credit"] == "50000.00"
-    assert df.iloc[1]["Debit"] == ""
-
-
-def test_native_pdf_fixture_parses_via_text_fallback(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    # Force no camelot so we prove the text path works alone.
-    monkeypatch.setenv("FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK", "false")
-    path = Path(__file__).resolve().parents[1] / "fixtures" / "sbi_native.pdf"
-    profile = profile_file(path)
-    result = NativePdfParser().parse(path, profile)
-    assert len(result.dataframe) >= 2
-    assert "Txn Date" in list(result.dataframe.columns) or "Date" in " ".join(
-        str(c) for c in result.dataframe.columns
-    )
+def test_camelot_batch_pages_default_and_override(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("FINUNDERWRITE_CAMELOT_BATCH_PAGES", raising=False)
+    assert camelot_batch_pages() == 5
+    monkeypatch.setenv("FINUNDERWRITE_CAMELOT_BATCH_PAGES", "3")
+    assert camelot_batch_pages() == 3

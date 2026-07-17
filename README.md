@@ -140,8 +140,8 @@ Optional env / secrets in Space settings:
 | `FINUNDERWRITE_DATABASE_URL` | SQLite in-container | Set to Neon/Supabase Postgres if you need persistence across sleeps |
 | `FINUNDERWRITE_LLM_ENRICH_ENABLED` | `false` | Keep off on free tier |
 | `FINUNDERWRITE_ENRICHER` | `null` | Keep null on free tier |
-| `FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK` | `true` | Camelot runs in a subprocess on Render; text fallback covers SBI PDFs |
-| `FINUNDERWRITE_MAX_SYNC_PDF_PAGES` | `8` on Render | Caps pages for synchronous PDF ingest |
+| `FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK` | `true` | In-process camelot after pdfplumber; runs on all hosts including Render |
+| `FINUNDERWRITE_CAMELOT_BATCH_PAGES` | `5` | Camelot page batch size to limit peak memory / avoid OOM 502s |
 
 Notes:
 
