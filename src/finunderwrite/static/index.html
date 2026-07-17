@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>finunderwrite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand-mark" href="/">finunderwrite</a>
+      <div class="status-pill" id="health-status" title="API health">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="health-label">checking</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="hero">
+        <p class="brand-hero">finunderwrite</p>
+        <h1>Statement intelligence for underwriting</h1>
+        <p class="lede">
+          Upload a bank statement. We normalize it, categorize merchants, and
+          surface a financial profile you can underwrite against.
+        </p>
+        <form class="upload-form" id="upload-form">
+          <label class="field">
+            <span>Customer ID</span>
+            <input
+              type="text"
+              id="customer-id"
+              name="customer_id"
+              value="demo"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label class="dropzone" id="dropzone">
+            <input
+              type="file"
+              id="file-input"
+              name="file"
+              accept=".csv,.xlsx,.xls,.pdf"
+              required
+            />
+            <span class="dropzone-title">Drop a statement here</span>
+            <span class="dropzone-hint">CSV, XLSX, or PDF · max size from server config</span>
+            <span class="file-name" id="file-name"></span>
+          </label>
+          <div class="cta-row">
+            <button type="submit" class="btn-primary" id="upload-btn">
+              Ingest statement
+            </button>
+            <p class="form-note" id="upload-note" role="status"></p>
+          </div>
+        </form>
+      </section>
+
+      <section class="workspace" id="workspace" hidden>
+        <nav class="tabs" role="tablist" aria-label="Workspace">
+          <button class="tab is-active" data-panel="transactions" role="tab" aria-selected="true">
+            Transactions
+          </button>
+          <button class="tab" data-panel="profile" role="tab" aria-selected="false">
+            Profile
+          </button>
+          <button class="tab" data-panel="features" role="tab" aria-selected="false">
+            Features
+          </button>
+        </nav>
+
+        <div class="panel is-active" id="panel-transactions" role="tabpanel">
+          <div class="panel-head">
+            <h2>Normalized ledger</h2>
+            <p id="txn-meta">No transactions loaded yet.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Merchant</th>
+                  <th>Description</th>
+                  <th>Debit</th>
+                  <th>Credit</th>
+                  <th>Category</th>
+                </tr>
+              </thead>
+              <tbody id="txn-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-profile" role="tabpanel" hidden>
+          <div class="panel-head">
+            <h2>Financial profile</h2>
+            <p>Built on demand from stored transactions for this customer.</p>
+          </div>
+          <dl class="metric-grid" id="profile-grid"></dl>
+        </div>
+
+        <div class="panel" id="panel-features" role="tabpanel" hidden>
+          <div class="panel-head">
+            <h2>Underwriting features</h2>
+            <p>Deterministic feature row used for scoring and synthetic work.</p>
+          </div>
+          <dl class="metric-grid" id="features-grid"></dl>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>API docs at <a href="/docs">/docs</a></span>
+      <span id="version-label"></span>
+    </footer>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

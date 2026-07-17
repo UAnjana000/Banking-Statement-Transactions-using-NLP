@@ -1,0 +1,264 @@
+{
+  "schema_version": "1.0",
+  "project": "finunderwrite",
+  "last_updated": "2026-07-17T23:30:00Z",
+  "canonical_schema_version": "1.0",
+  "contracts": {
+    "CanonicalTransaction": [
+      "transaction_id",
+      "date",
+      "merchant",
+      "description",
+      "debit",
+      "credit",
+      "balance",
+      "currency",
+      "bank",
+      "reference_number",
+      "account_type",
+      "payment_mode",
+      "category",
+      "category_confidence"
+    ],
+    "FinancialProfile": [
+      "customer_id",
+      "income",
+      "income_stability",
+      "monthly_spend",
+      "monthly_saving",
+      "savings_ratio",
+      "investment_ratio",
+      "emi_ratio",
+      "debt_ratio",
+      "preferred_merchants",
+      "preferred_payment_modes",
+      "expected_cashflow"
+    ]
+  },
+  "modules": [
+    {
+      "name": "contracts",
+      "status": "tested",
+      "description": "Frozen pydantic v2 models: CanonicalTransaction, FinancialProfile stub.",
+      "entrypoints": [
+        "src/finunderwrite/contracts/transaction.py",
+        "src/finunderwrite/contracts/profile.py"
+      ],
+      "depends_on": [],
+      "test_coverage": "tests/unit/test_contracts.py",
+      "last_touched": "2026-07-17T19:50:00Z",
+      "notes": "FinancialProfile builder deferred to later prompt."
+    },
+    {
+      "name": "inventory",
+      "status": "tested",
+      "description": "Detect file type, bank, layout, text-layer presence.",
+      "entrypoints": ["src/finunderwrite/inventory/profiler.py"],
+      "depends_on": ["contracts"],
+      "test_coverage": "tests/unit/test_inventory.py",
+      "last_touched": "2026-07-17T19:50:00Z",
+      "notes": "CLI: finunderwrite inventory <folder>"
+    },
+    {
+      "name": "parser",
+      "status": "tested",
+      "description": "Universal parser: tabular, native PDF, scanned PDF.",
+      "entrypoints": [
+        "src/finunderwrite/parser/base.py",
+        "src/finunderwrite/parser/tabular.py",
+        "src/finunderwrite/parser/pdf_native.py",
+        "src/finunderwrite/parser/pdf_scanned.py"
+      ],
+      "depends_on": ["inventory"],
+      "test_coverage": "tests/unit/test_parser_tabular.py",
+      "last_touched": "2026-07-17T19:50:00Z",
+      "notes": "Batch runner collects per-file errors. ScannedPdfParser lazy-imports OCR deps."
+    },
+    {
+      "name": "schema_detection",
+      "status": "tested",
+      "description": "Synonym + fuzzy + type-inference column mapping.",
+      "entrypoints": ["src/finunderwrite/schema_detection/mapper.py"],
+      "depends_on": ["parser"],
+      "test_coverage": "tests/unit/test_schema_detection.py",
+      "last_touched": "2026-07-17T19:50:00Z",
+      "notes": "Reads config/column_synonyms.yaml via minimal in-repo YAML loader."
+    },
+    {
+      "name": "normalize",
+      "status": "tested",
+      "description": "Raw table + mapping -> List[CanonicalTransaction].",
+      "entrypoints": ["src/finunderwrite/normalize/normalizer.py"],
+      "depends_on": ["schema_detection", "contracts"],
+      "test_coverage": "tests/unit/test_normalizer.py",
+      "last_touched": "2026-07-17T19:50:00Z",
+      "notes": "Handles signed-amount split and payment_mode inference."
+    },
+    {
+      "name": "merchant",
+      "status": "tested",
+      "description": "Extract merchant/payment_mode; hybrid rules+sklearn categorization; defensive live enrichment.",
+      "entrypoints": [
+        "src/finunderwrite/merchant/extract.py",
+        "src/finunderwrite/merchant/categorize.py",
+        "src/finunderwrite/merchant/enrich.py"
+      ],
+      "depends_on": ["normalize", "persistence"],
+      "test_coverage": "tests/unit/test_merchant_extract.py, tests/unit/test_merchant_categorize.py, tests/unit/test_merchant_enrich.py",
+      "last_touched": "2026-07-17T21:20:00Z",
+      "notes": "Rules from config/*.yaml. Tier2 char-ngram TFIDF+LogisticRegression (joblib). Tier3 LLM (Groq) OFF by default. Enrichment request-path is cache-read-only; enrich-batch CLI does bulk network."
+    },
+    {
+      "name": "behaviour",
+      "status": "tested",
+      "description": "Deterministic behaviour summary + recurring detection (pandas/numpy).",
+      "entrypoints": [
+        "src/finunderwrite/behaviour/summary.py",
+        "src/finunderwrite/behaviour/recurring.py"
+      ],
+      "depends_on": ["normalize"],
+      "test_coverage": "tests/unit/test_behaviour.py, tests/unit/test_recurring.py",
+      "last_touched": "2026-07-17T22:20:00Z",
+      "notes": "Salary detection, cashflow, ratios, balance/txn stats, cadence clustering. Handles short histories/missing balances."
+    },
+    {
+      "name": "profile",
+      "status": "tested",
+      "description": "FinancialProfile builder per customer.",
+      "entrypoints": ["src/finunderwrite/profile/builder.py"],
+      "depends_on": ["behaviour"],
+      "test_coverage": "tests/unit/test_profile.py",
+      "last_touched": "2026-07-17T22:20:00Z",
+      "notes": "Maps behaviour + recurring into frozen FinancialProfile; extended detail in expected_cashflow."
+    },
+    {
+      "name": "features",
+      "status": "tested",
+      "description": "Deterministic underwriting feature table (one row per customer).",
+      "entrypoints": ["src/finunderwrite/features/vectorizer.py"],
+      "depends_on": ["profile", "behaviour"],
+      "test_coverage": "tests/unit/test_features.py",
+      "last_touched": "2026-07-17T22:20:00Z",
+      "notes": "Documented FEATURE_COLUMNS; no torch. This is the ML feature table."
+    },
+    {
+      "name": "synthetic",
+      "status": "implemented",
+      "description": "Offline-only synthetic generation (GaussianCopula/CTGAN/TVAE) + fidelity/privacy.",
+      "entrypoints": ["src/finunderwrite/synthetic/generate.py"],
+      "depends_on": ["features"],
+      "test_coverage": "tests/unit/test_synthetic.py (smoke auto-skips without sdv)",
+      "last_touched": "2026-07-17T22:20:00Z",
+      "notes": "Import-time torch/sdv guard; requirements-ml.txt only. Never importable on the web dyno. Smoke test skipped locally (ML stack not installed)."
+    },
+    {
+      "name": "persistence",
+      "status": "tested",
+      "description": "SQLAlchemy 2.0 + Alembic; enrichment cache/queue, LLM cache, transactions, profiles, features, synthetic registry; DuckDB analytics.",
+      "entrypoints": [
+        "src/finunderwrite/persistence/database.py",
+        "src/finunderwrite/persistence/models.py",
+        "src/finunderwrite/persistence/repository.py",
+        "src/finunderwrite/persistence/analytics.py"
+      ],
+      "depends_on": ["contracts"],
+      "test_coverage": "tests/unit/test_merchant_enrich.py, tests/unit/test_api.py, tests/unit/test_analytics.py",
+      "last_touched": "2026-07-17T22:20:00Z",
+      "notes": "DATABASE_URL default sqlite:///local.db, Postgres via psycopg for deploy. Alembic migration 0001 creates all tables."
+    },
+    {
+      "name": "api",
+      "status": "tested",
+      "description": "Lightweight FastAPI service (health, statements, transactions, profile, features, synthetic).",
+      "entrypoints": ["src/finunderwrite/api/app.py", "src/finunderwrite/api/routers/"],
+      "depends_on": ["normalize", "profile", "features", "persistence"],
+      "test_coverage": "tests/unit/test_api.py",
+      "last_touched": "2026-07-17T23:30:00Z",
+      "notes": "Request-ID middleware, global exception handler, upload limits. Scanned PDFs return 202 (offline OCR). No torch/sdv in runtime. Serves static dashboard at /."
+    },
+    {
+      "name": "web_ui",
+      "status": "tested",
+      "description": "Browser dashboard: statement upload, transaction ledger, profile and feature panels.",
+      "entrypoints": [
+        "src/finunderwrite/static/index.html",
+        "src/finunderwrite/static/styles.css",
+        "src/finunderwrite/static/app.js"
+      ],
+      "depends_on": ["api"],
+      "test_coverage": "tests/unit/test_api.py::test_ui_index_and_static_assets",
+      "last_touched": "2026-07-17T23:30:00Z",
+      "notes": "Static SPA mounted by FastAPI; no separate frontend build. Brand-led sea/copper visual language."
+    }
+  ],
+  "status_enum": ["not_started", "in_progress", "implemented", "tested", "stable"],
+  "decisions": [
+    {
+      "id": "ADR-001",
+      "date": "2026-07-17",
+      "choice": "Two frozen contracts (CanonicalTransaction, FinancialProfile) as the module boundary.",
+      "rationale": "Bank-agnostic swapping."
+    },
+    {
+      "id": "ADR-002",
+      "date": "2026-07-17",
+      "choice": "src-layout package with setuptools; minimal in-repo YAML loader (no PyYAML dependency).",
+      "rationale": "Stay within listed dependencies; config files remain YAML for human editing."
+    },
+    {
+      "id": "ADR-003",
+      "date": "2026-07-17",
+      "choice": "Synthetic PDF fixtures generated via pure-Python PDF writer and blank-page PDF for scanned case.",
+      "rationale": "Avoid unlisted reportlab; keep fixtures commit-safe."
+    },
+    {
+      "id": "ADR-004",
+      "date": "2026-07-17",
+      "choice": "Adopt PyYAML for config parsing; yaml_loader now wraps yaml.safe_load. Supersedes ADR-002.",
+      "rationale": "Merchant rules and category map require nested list-of-dicts the minimal loader could not parse; httpx/tenacity were already being added, so a robust YAML parser is warranted."
+    },
+    {
+      "id": "ADR-005",
+      "date": "2026-07-17",
+      "choice": "Hybrid categorizer (rules -> char-ngram TFIDF+LogisticRegression -> optional LLM). LLM Tier 3 OFF by default. Enrichment request-path is cache-read-only; bulk network only in enrich-batch.",
+      "rationale": "Deterministic, torch-free, and privacy-preserving by default; enrichment never blocks or fails categorization."
+    },
+    {
+      "id": "ADR-006",
+      "date": "2026-07-17",
+      "choice": "Split dependencies: lightweight requirements.txt for the web/serving runtime (no torch/sdv/sentence-transformers/spacy) and requirements-ml.txt for the offline ML stack.",
+      "rationale": "Keeps the Render web dyno within a 512 MB budget and torch-free; heavy ML is offline-only."
+    },
+    {
+      "id": "ADR-007",
+      "date": "2026-07-17",
+      "choice": "BehaviourSummary and RecurringItem are internal (non-contract) pydantic types; profile builder maps them into the frozen FinancialProfile, carrying extended detail in expected_cashflow. Pure pandas/numpy, deterministic.",
+      "rationale": "Adds analytics without changing the frozen contracts (no canonical_schema_version bump)."
+    },
+    {
+      "id": "ADR-008",
+      "date": "2026-07-17",
+      "choice": "Synthetic generation is offline-only with an import-time torch/sdv guard. SDV is BUSL-licensed (verify terms before commercial use); SynthCity (Apache-2.0) is the benchmarked alternative.",
+      "rationale": "Prevents the ML stack from ever loading on the web dyno and flags the licensing constraint."
+    },
+    {
+      "id": "ADR-009",
+      "date": "2026-07-17",
+      "choice": "Alembic migrations with DATABASE_URL (sqlite:///local.db dev, Postgres via psycopg for deploy); DuckDB as a read-only local analytics layer.",
+      "rationale": "External managed Postgres survives Render's ephemeral filesystem; DuckDB gives local analytics without touching the operational store."
+    },
+    {
+      "id": "ADR-010",
+      "date": "2026-07-17",
+      "choice": "Serve a static HTML/CSS/JS dashboard from FastAPI (/ and /static) instead of a separate Node frontend.",
+      "rationale": "Keeps the Render image single-process and torch-free; UI talks to existing JSON endpoints without a build step."
+    }
+  ],
+  "open_questions": [],
+  "synthetic_datasets": [],
+  "next_actions": [
+    "Install requirements-ml.txt offline and run 'finunderwrite synth-generate' to populate + register datasets",
+    "Push to GitHub, set FINUNDERWRITE_DATABASE_URL to external Postgres, deploy via render.yaml",
+    "Future prompts: risk scoring, fraud detection, RAG"
+  ]
+}
