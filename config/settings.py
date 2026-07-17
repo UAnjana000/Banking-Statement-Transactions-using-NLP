@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -118,8 +120,41 @@ class Settings(BaseSettings):
 _settings: Settings | None = None
 
 
+def _emit_debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # region agent log
+    try:
+        payload = {
+            "sessionId": "508052",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with Path("debug-508052.log").open("a", encoding="utf-8") as file_obj:
+            file_obj.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except Exception:
+        pass
+    # endregion
+
+
 def get_settings() -> Settings:
     global _settings
+    _emit_debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H2",
+        location="config/settings.py:get_settings",
+        message="Settings requested",
+        data={"cache_hit": _settings is not None},
+    )
     if _settings is None:
         _settings = Settings()
+        _emit_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H2",
+            location="config/settings.py:get_settings",
+            message="Settings initialized",
+            data={"log_level": _settings.log_level},
+        )
     return _settings
