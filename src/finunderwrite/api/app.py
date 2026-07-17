@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -31,33 +29,7 @@ from finunderwrite.logging import configure_logging, get_request_id
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
-def _emit_debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    # region agent log
-    try:
-        payload = {
-            "sessionId": "508052",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with Path("debug-508052.log").open("a", encoding="utf-8") as file_obj:
-            file_obj.write(json.dumps(payload, ensure_ascii=True) + "\n")
-    except Exception:
-        pass
-    # endregion
-
-
 def create_app() -> FastAPI:
-    _emit_debug_log(
-        run_id="pre-fix",
-        hypothesis_id="H3",
-        location="src/finunderwrite/api/app.py:create_app",
-        message="create_app entered",
-        data={"static_dir_exists": _STATIC_DIR.is_dir()},
-    )
     settings = get_settings()
     configure_logging(settings.log_level)
 
@@ -139,10 +111,3 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
 
 app = create_app()
-_emit_debug_log(
-    run_id="pre-fix",
-    hypothesis_id="H3",
-    location="src/finunderwrite/api/app.py:module",
-    message="ASGI app module initialized",
-    data={"module": __name__},
-)
