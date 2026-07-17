@@ -1,7 +1,8 @@
-"""Native PDF parser: pdfplumber with optional camelot fallback."""
+"""Native PDF parser: pdfplumber tables, text-line fallback, optional camelot."""
 
 from __future__ import annotations
 
+import multiprocessing as mp
 import os
 import re
 from pathlib import Path
@@ -13,6 +14,21 @@ from finunderwrite.inventory.profiler import FileProfile
 from finunderwrite.parser.base import ParseMetadata, Parser, ParseResult
 
 _AMOUNT_RE = re.compile(r"^-?\d[\d,]*\.?\d*$")
+_AMOUNT_TOKEN_RE = re.compile(r"^-?\d[\d,]*\.\d{2}$")
+_DATE_LINE_RE = re.compile(
+    r"^(?P<date>\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(?P<rest>.+)$"
+)
+_CREDIT_HINTS = (
+    "salary",
+    "neft-",
+    "imps-",
+    "rtgs-",
+    "interest",
+    "refund",
+    "deposit",
+    "credit",
+    "upi-cr",
+)
 
 
 def _truthy_env(name: str) -> bool | None:
@@ -23,11 +39,11 @@ def _truthy_env(name: str) -> bool | None:
 
 
 def camelot_fallback_enabled() -> bool:
-    """Camelot/OpenCV is memory-heavy; keep it off on Render unless forced on."""
+    """Camelot is optional. Off only when explicitly disabled."""
     explicit = _truthy_env("FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK")
     if explicit is not None:
         return explicit
-    return os.getenv("RENDER") is None
+    return True
 
 
 def max_sync_pdf_pages() -> int:
@@ -38,7 +54,6 @@ def max_sync_pdf_pages() -> int:
             return max(1, int(raw))
         except ValueError:
             logger.warning("Invalid FINUNDERWRITE_MAX_SYNC_PDF_PAGES={!r}; using default", raw)
-    # Free-tier Render (~512MB) dies on large multi-page extract_tables + camelot.
     if os.getenv("RENDER") is not None:
         return 8
     return 50
@@ -63,6 +78,7 @@ class NativePdfParser(Parser):
         page_count = 0
         header: list[str] | None = None
         page_limit = max_sync_pdf_pages()
+        text_chunks: list[str] = []
 
         try:
             with pdfplumber.open(path) as pdf:
@@ -79,6 +95,9 @@ class NativePdfParser(Parser):
                 for index in range(pages_to_read):
                     page = pdf.pages[index]
                     try:
+                        page_text = page.extract_text() or ""
+                        if page_text.strip():
+                            text_chunks.append(page_text)
                         tables = page.extract_tables() or []
                         for table in tables:
                             if not table or len(table) < 2:
@@ -94,7 +113,6 @@ class NativePdfParser(Parser):
                                 if not df.empty:
                                     frames.append(df)
                     finally:
-                        # Drop per-page caches so multi-page PDFs do not balloon RSS.
                         if hasattr(page, "flush_cache"):
                             page.flush_cache()
                         if hasattr(page, "close"):
@@ -105,6 +123,16 @@ class NativePdfParser(Parser):
         except Exception as exc:
             msg = f"pdfplumber failed on {path.name}: {exc}"
             logger.warning(msg)
+
+        if not frames:
+            text_df = parse_statement_text("\n".join(text_chunks))
+            if text_df is not None and not text_df.empty:
+                logger.info(
+                    "Text fallback extracted {} row(s) from {}",
+                    len(text_df),
+                    path.name,
+                )
+                frames = [text_df]
 
         if not frames:
             frames = self._camelot_fallback(path)
@@ -130,39 +158,191 @@ class NativePdfParser(Parser):
 
     def _camelot_fallback(self, path: Path) -> list[pd.DataFrame]:
         if not camelot_fallback_enabled():
-            logger.info("camelot fallback disabled for {} (low-memory host)", path.name)
+            logger.info("camelot fallback disabled for {}", path.name)
             return []
 
+        # On Render, run camelot out-of-process so OpenCV OOM cannot kill gunicorn.
+        if os.getenv("RENDER") is not None:
+            return _camelot_in_subprocess(path)
+
+        return _camelot_inline(path)
+
+
+def _camelot_inline(path: Path) -> list[pd.DataFrame]:
+    try:
+        import camelot
+    except ImportError:
+        logger.debug("camelot not available for fallback")
+        return []
+
+    frames: list[pd.DataFrame] = []
+    page_limit = max_sync_pdf_pages()
+    pages_arg = f"1-{page_limit}"
+    for flavor in ("lattice", "stream"):
         try:
-            import camelot
-        except ImportError:
-            logger.debug("camelot not available for fallback")
-            return []
+            tables = camelot.read_pdf(str(path), pages=pages_arg, flavor=flavor)
+        except Exception as exc:
+            logger.debug("camelot {} failed on {}: {}", flavor, path.name, exc)
+            continue
+        for table in tables:
+            df = table.df
+            if df.shape[0] >= 2:
+                df.columns = df.iloc[0]
+                df = df.iloc[1:].reset_index(drop=True)
+                frames.append(_ensure_unique_columns(df))
+        if frames:
+            logger.info(
+                "camelot ({}) extracted {} table(s) from {}",
+                flavor,
+                len(frames),
+                path.name,
+            )
+            break
+    return frames
 
-        frames: list[pd.DataFrame] = []
-        page_limit = max_sync_pdf_pages()
-        pages_arg = f"1-{page_limit}"
+
+def _camelot_worker(path_str: str, pages_arg: str, queue: mp.Queue) -> None:  # type: ignore[type-arg]
+    try:
+        import camelot
+
+        frames_payload: list[list[list[str]]] = []
+        columns_payload: list[list[str]] = []
         for flavor in ("lattice", "stream"):
             try:
-                tables = camelot.read_pdf(str(path), pages=pages_arg, flavor=flavor)
-            except Exception as exc:
-                logger.debug("camelot {} failed on {}: {}", flavor, path.name, exc)
+                tables = camelot.read_pdf(path_str, pages=pages_arg, flavor=flavor)
+            except Exception:
                 continue
             for table in tables:
                 df = table.df
-                if df.shape[0] >= 2:
-                    df.columns = df.iloc[0]
-                    df = df.iloc[1:].reset_index(drop=True)
-                    frames.append(_ensure_unique_columns(df))
-            if frames:
-                logger.info(
-                    "camelot ({}) extracted {} table(s) from {}",
-                    flavor,
-                    len(frames),
-                    path.name,
-                )
-                break
-        return frames
+                if df.shape[0] < 2:
+                    continue
+                header = [str(c) for c in df.iloc[0].tolist()]
+                body = df.iloc[1:].astype(str).values.tolist()
+                columns_payload.append(header)
+                frames_payload.append(body)
+            if frames_payload:
+                queue.put({"ok": True, "columns": columns_payload, "frames": frames_payload})
+                return
+        queue.put({"ok": True, "columns": [], "frames": []})
+    except Exception as exc:  # pragma: no cover - child boundary
+        queue.put({"ok": False, "error": str(exc)})
+
+
+def _camelot_in_subprocess(path: Path) -> list[pd.DataFrame]:
+    """Run camelot in a child process; parent survives OOM/SIGKILL."""
+    timeout = int(os.getenv("FINUNDERWRITE_CAMELOT_TIMEOUT_SECONDS", "45"))
+    pages_arg = f"1-{max_sync_pdf_pages()}"
+    logger.info("Running camelot fallback in subprocess for {} ({})", path.name, pages_arg)
+    ctx = mp.get_context("spawn")
+    queue: mp.Queue = ctx.Queue()  # type: ignore[type-arg]
+    proc = ctx.Process(
+        target=_camelot_worker,
+        args=(str(path), pages_arg, queue),
+        daemon=True,
+    )
+    proc.start()
+    proc.join(timeout=timeout)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(5)
+        logger.warning("camelot subprocess timed out for {}", path.name)
+        return []
+    if proc.exitcode not in (0, None) and queue.empty():
+        logger.warning("camelot subprocess killed for {} (exit={})", path.name, proc.exitcode)
+        return []
+    try:
+        payload = queue.get_nowait()
+    except Exception:
+        return []
+    if not payload.get("ok"):
+        logger.warning("camelot subprocess failed for {}: {}", path.name, payload.get("error"))
+        return []
+    frames: list[pd.DataFrame] = []
+    for header, body in zip(payload.get("columns") or [], payload.get("frames") or [], strict=False):
+        df = pd.DataFrame(body, columns=header)
+        frames.append(_ensure_unique_columns(df))
+    if frames:
+        logger.info("camelot subprocess extracted {} frame(s) from {}", len(frames), path.name)
+    return frames
+
+
+def parse_statement_text(text: str) -> pd.DataFrame | None:
+    """Parse bank-statement text lines into a transaction table.
+
+    Many Indian bank PDFs (including SBI) expose a text layer but no grid tables,
+    so pdfplumber ``extract_tables`` returns nothing. This fallback keeps ingest
+    working without camelot/OpenCV.
+    """
+    if not text or not text.strip():
+        return None
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    rows: list[dict[str, str]] = []
+    for line in lines:
+        parsed = _parse_text_transaction_line(line)
+        if parsed is not None:
+            rows.append(parsed)
+
+    if not rows:
+        return None
+
+    return pd.DataFrame(rows, columns=["Txn Date", "Description", "Debit", "Credit", "Balance"])
+
+
+def _parse_text_transaction_line(line: str) -> dict[str, str] | None:
+    match = _DATE_LINE_RE.match(line)
+    if match is None:
+        return None
+
+    date = match.group("date")
+    tokens = match.group("rest").split()
+    if len(tokens) < 2:
+        return None
+
+    amounts: list[str] = []
+    while tokens and _AMOUNT_TOKEN_RE.match(tokens[-1].replace(",", "")):
+        amounts.insert(0, tokens.pop())
+    if not amounts:
+        return None
+
+    description = " ".join(tokens).strip()
+    if not description:
+        return None
+    # Skip repeated header-like lines that begin with a date-looking token poorly.
+    lower_desc = description.lower()
+    if "debit" in lower_desc and "credit" in lower_desc:
+        return None
+
+    debit = ""
+    credit = ""
+    balance = ""
+
+    if len(amounts) >= 3:
+        debit, credit, balance = amounts[-3], amounts[-2], amounts[-1]
+        if debit in {"", "-"}:
+            debit = ""
+        if credit in {"", "-"}:
+            credit = ""
+    elif len(amounts) == 2:
+        amount, balance = amounts[0], amounts[1]
+        if any(hint in lower_desc for hint in _CREDIT_HINTS):
+            credit = amount
+        else:
+            debit = amount
+    else:
+        amount = amounts[0]
+        if any(hint in lower_desc for hint in _CREDIT_HINTS):
+            credit = amount
+        else:
+            debit = amount
+
+    return {
+        "Txn Date": date,
+        "Description": description,
+        "Debit": debit,
+        "Credit": credit,
+        "Balance": balance,
+    }
 
 
 def _unique_column_names(columns: list[object] | pd.Index) -> list[str]:
