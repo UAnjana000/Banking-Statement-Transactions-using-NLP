@@ -48,6 +48,14 @@ def test_ui_index_and_static_assets(client: TestClient) -> None:
     assert "/statements" in js.text
 
 
+def test_root_head_and_favicon(client: TestClient) -> None:
+    head = client.head("/")
+    assert head.status_code == 200
+
+    favicon = client.get("/favicon.ico")
+    assert favicon.status_code == 204
+
+
 def test_health_includes_upload_limit_mb(client: TestClient) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200

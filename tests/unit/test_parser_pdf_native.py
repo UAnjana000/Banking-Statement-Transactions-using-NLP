@@ -8,6 +8,8 @@ from finunderwrite.parser.pdf_native import (
     _coalesce_compatible_frames,
     _ensure_unique_columns,
     _unique_column_names,
+    camelot_fallback_enabled,
+    max_sync_pdf_pages,
 )
 
 
@@ -37,3 +39,21 @@ def test_coalesce_prefers_transaction_like_width() -> None:
     selected = _coalesce_compatible_frames([summary, txns, junk])
     assert len(selected) == 1
     assert list(selected[0].columns) == ["Date", "Description", "Debit", "Balance"]
+
+
+def test_camelot_fallback_disabled_on_render(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    assert camelot_fallback_enabled() is False
+
+
+def test_camelot_fallback_can_be_forced_on(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.setenv("FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK", "true")
+    assert camelot_fallback_enabled() is True
+
+
+def test_max_sync_pdf_pages_defaults_low_on_render(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("FINUNDERWRITE_MAX_SYNC_PDF_PAGES", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    assert max_sync_pdf_pages() == 8

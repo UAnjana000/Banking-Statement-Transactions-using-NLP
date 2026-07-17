@@ -11,7 +11,7 @@ from pathlib import Path
 from config.settings import get_settings
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -147,7 +147,7 @@ def create_app() -> FastAPI:
         )
         # endregion
 
-        @app.get("/", include_in_schema=False)
+        @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
         async def ui_index() -> FileResponse:
             # region agent log
             _debug_log(
@@ -169,6 +169,11 @@ def create_app() -> FastAPI:
             data={"reason": "static_dir_missing", "static_dir": str(_STATIC_DIR)},
         )
         # endregion
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> Response:
+        # Browsers auto-request this; avoid noisy 404s in logs/consoles.
+        return Response(status_code=204)
 
     _register_exception_handlers(app)
 

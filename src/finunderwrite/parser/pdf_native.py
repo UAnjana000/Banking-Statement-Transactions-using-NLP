@@ -1,7 +1,8 @@
-"""Native PDF parser: pdfplumber with camelot fallback."""
+"""Native PDF parser: pdfplumber with optional camelot fallback."""
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -12,6 +13,35 @@ from finunderwrite.inventory.profiler import FileProfile
 from finunderwrite.parser.base import ParseMetadata, Parser, ParseResult
 
 _AMOUNT_RE = re.compile(r"^-?\d[\d,]*\.?\d*$")
+
+
+def _truthy_env(name: str) -> bool | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def camelot_fallback_enabled() -> bool:
+    """Camelot/OpenCV is memory-heavy; keep it off on Render unless forced on."""
+    explicit = _truthy_env("FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK")
+    if explicit is not None:
+        return explicit
+    return os.getenv("RENDER") is None
+
+
+def max_sync_pdf_pages() -> int:
+    """Cap pages for synchronous ingest on low-memory hosts."""
+    raw = os.getenv("FINUNDERWRITE_MAX_SYNC_PDF_PAGES")
+    if raw is not None and raw.strip():
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            logger.warning("Invalid FINUNDERWRITE_MAX_SYNC_PDF_PAGES={!r}; using default", raw)
+    # Free-tier Render (~512MB) dies on large multi-page extract_tables + camelot.
+    if os.getenv("RENDER") is not None:
+        return 8
+    return 50
 
 
 class NativePdfParser(Parser):
@@ -32,25 +62,46 @@ class NativePdfParser(Parser):
         frames: list[pd.DataFrame] = []
         page_count = 0
         header: list[str] | None = None
+        page_limit = max_sync_pdf_pages()
 
         try:
             with pdfplumber.open(path) as pdf:
                 page_count = len(pdf.pages)
-                for page in pdf.pages:
-                    tables = page.extract_tables() or []
-                    for table in tables:
-                        if not table or len(table) < 2:
-                            continue
-                        df = _table_to_dataframe(table)
-                        if df is None or df.empty:
-                            continue
-                        if header is None:
-                            header = list(df.columns)
-                            frames.append(df)
-                        else:
-                            df = _align_to_header(df, header)
-                            if not df.empty:
+                pages_to_read = min(page_count, page_limit)
+                if page_count > page_limit:
+                    logger.warning(
+                        "PDF {} has {} pages; parsing first {} only "
+                        "(set FINUNDERWRITE_MAX_SYNC_PDF_PAGES to raise)",
+                        path.name,
+                        page_count,
+                        page_limit,
+                    )
+                for index in range(pages_to_read):
+                    page = pdf.pages[index]
+                    try:
+                        tables = page.extract_tables() or []
+                        for table in tables:
+                            if not table or len(table) < 2:
+                                continue
+                            df = _table_to_dataframe(table)
+                            if df is None or df.empty:
+                                continue
+                            if header is None:
+                                header = list(df.columns)
                                 frames.append(df)
+                            else:
+                                df = _align_to_header(df, header)
+                                if not df.empty:
+                                    frames.append(df)
+                    finally:
+                        # Drop per-page caches so multi-page PDFs do not balloon RSS.
+                        if hasattr(page, "flush_cache"):
+                            page.flush_cache()
+                        if hasattr(page, "close"):
+                            try:
+                                page.close()
+                            except Exception:  # pragma: no cover - best effort
+                                pass
         except Exception as exc:
             msg = f"pdfplumber failed on {path.name}: {exc}"
             logger.warning(msg)
@@ -78,6 +129,10 @@ class NativePdfParser(Parser):
         )
 
     def _camelot_fallback(self, path: Path) -> list[pd.DataFrame]:
+        if not camelot_fallback_enabled():
+            logger.info("camelot fallback disabled for {} (low-memory host)", path.name)
+            return []
+
         try:
             import camelot
         except ImportError:
@@ -85,9 +140,11 @@ class NativePdfParser(Parser):
             return []
 
         frames: list[pd.DataFrame] = []
+        page_limit = max_sync_pdf_pages()
+        pages_arg = f"1-{page_limit}"
         for flavor in ("lattice", "stream"):
             try:
-                tables = camelot.read_pdf(str(path), pages="all", flavor=flavor)
+                tables = camelot.read_pdf(str(path), pages=pages_arg, flavor=flavor)
             except Exception as exc:
                 logger.debug("camelot {} failed on {}: {}", flavor, path.name, exc)
                 continue

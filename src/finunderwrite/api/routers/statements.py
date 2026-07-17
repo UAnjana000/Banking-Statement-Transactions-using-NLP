@@ -11,11 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from finunderwrite.api.pipeline import (
-    enrich_transactions,
-    parse_and_normalize,
-    transaction_to_record,
-)
+from finunderwrite.api.process_upload import process_statement_file
 from finunderwrite.api.schemas import StatementUploadResponse
 from finunderwrite.inventory.profiler import profile_file
 from finunderwrite.persistence import repository
@@ -57,9 +53,19 @@ async def upload_statement(
     os.close(fd)
     tmp_path = Path(tmp_name)
     tmp_path.write_bytes(content)
+    # Free the in-memory upload buffer before heavy PDF work (critical on 512MB hosts).
+    del content
 
     try:
+        logger.info("Profiling upload {}", filename)
         profile = profile_file(tmp_path)
+        logger.info(
+            "Profiled {}: type={} pdf_kind={} bank={}",
+            filename,
+            profile.file_type,
+            profile.pdf_kind,
+            profile.detected_bank,
+        )
 
         # Scanned PDFs are NOT OCR'd synchronously (would time out on a free instance).
         if profile.file_type == "pdf" and profile.pdf_kind == "scanned":
@@ -79,21 +85,25 @@ async def upload_statement(
                 },
             )
 
-        transactions = parse_and_normalize(tmp_path, profile)
-        transactions = enrich_transactions(transactions)
-        records = [transaction_to_record(t) for t in transactions]
+        logger.info("Parsing/enriching {}", filename)
+        records, file_type, pdf_kind = process_statement_file(tmp_path, profile)
+        logger.info("Parsed {} into {} transaction(s); persisting", filename, len(records))
         ingested = repository.save_transactions(customer_id, records)
 
         return StatementUploadResponse(
             status="processed",
             customer_id=customer_id,
             filename=filename,
-            file_type=profile.file_type,
-            pdf_kind=profile.pdf_kind,
+            file_type=file_type,
+            pdf_kind=pdf_kind,
             transactions_ingested=ingested,
         )
     except HTTPException:
         raise
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except MemoryError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive
