@@ -1,8 +1,7 @@
-"""Native PDF parser: pdfplumber with batched in-process camelot fallback."""
+"""Native PDF parser: pdfplumber tables, text-line fallback, optional camelot."""
 
 from __future__ import annotations
 
-import gc
 import os
 import re
 from pathlib import Path
@@ -14,6 +13,21 @@ from finunderwrite.inventory.profiler import FileProfile
 from finunderwrite.parser.base import ParseMetadata, Parser, ParseResult
 
 _AMOUNT_RE = re.compile(r"^-?\d[\d,]*\.?\d*$")
+_AMOUNT_TOKEN_RE = re.compile(r"^-?\d[\d,]*\.\d{2}$")
+_DATE_LINE_RE = re.compile(
+    r"^(?P<date>\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(?P<rest>.+)$"
+)
+_CREDIT_HINTS = (
+    "salary",
+    "neft-",
+    "imps-",
+    "rtgs-",
+    "interest",
+    "refund",
+    "deposit",
+    "credit",
+    "upi-cr",
+)
 
 
 def _truthy_env(name: str) -> bool | None:
@@ -24,35 +38,11 @@ def _truthy_env(name: str) -> bool | None:
 
 
 def camelot_fallback_enabled() -> bool:
-    """Camelot is optional. Off only when explicitly disabled."""
+    """Camelot is opt-in only (local/high-RAM). Default off for free Render."""
     explicit = _truthy_env("FINUNDERWRITE_ENABLE_CAMELOT_FALLBACK")
     if explicit is not None:
         return explicit
-    return True
-
-
-def camelot_batch_pages() -> int:
-    """Pages per in-process camelot batch (keeps peak RSS low on free hosts)."""
-    raw = os.getenv("FINUNDERWRITE_CAMELOT_BATCH_PAGES", "5")
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        logger.warning("Invalid FINUNDERWRITE_CAMELOT_BATCH_PAGES={!r}; using 5", raw)
-        return 5
-
-
-def _page_batches(total_pages: int, batch_size: int) -> list[str]:
-    """Return 1-indexed camelot page ranges, e.g. ``['1-5', '6-10', '11-12']``."""
-    if total_pages <= 0:
-        return []
-    size = max(1, batch_size)
-    ranges: list[str] = []
-    start = 1
-    while start <= total_pages:
-        end = min(start + size - 1, total_pages)
-        ranges.append(f"{start}-{end}")
-        start = end + 1
-    return ranges
+    return False
 
 
 class NativePdfParser(Parser):
@@ -73,12 +63,16 @@ class NativePdfParser(Parser):
         frames: list[pd.DataFrame] = []
         page_count = 0
         header: list[str] | None = None
+        text_chunks: list[str] = []
 
         try:
             with pdfplumber.open(path) as pdf:
                 page_count = len(pdf.pages)
                 for page in pdf.pages:
                     try:
+                        page_text = page.extract_text() or ""
+                        if page_text.strip():
+                            text_chunks.append(page_text)
                         tables = page.extract_tables() or []
                         for table in tables:
                             if not table or len(table) < 2:
@@ -107,7 +101,17 @@ class NativePdfParser(Parser):
             logger.warning(msg)
 
         if not frames:
-            frames = self._camelot_fallback(path, page_count)
+            text_df = parse_statement_text("\n".join(text_chunks))
+            if text_df is not None and not text_df.empty:
+                logger.info(
+                    "Text fallback extracted {} row(s) from {}",
+                    len(text_df),
+                    path.name,
+                )
+                frames = [text_df]
+
+        if not frames:
+            frames = self._camelot_fallback(path)
 
         if not frames:
             msg = f"No tables extracted from native PDF: {path.name}"
@@ -128,63 +132,122 @@ class NativePdfParser(Parser):
             ),
         )
 
-    def _camelot_fallback(self, path: Path, page_count: int) -> list[pd.DataFrame]:
+    def _camelot_fallback(self, path: Path) -> list[pd.DataFrame]:
         if not camelot_fallback_enabled():
             logger.info("camelot fallback disabled for {}", path.name)
             return []
-        return _camelot_batched(path, page_count)
+        return _camelot_inline(path)
 
 
-def _camelot_batched(path: Path, total_pages: int) -> list[pd.DataFrame]:
-    """Run camelot in-process over page batches to avoid loading the whole PDF at once."""
+def _camelot_inline(path: Path) -> list[pd.DataFrame]:
+    """In-process camelot (lattice then stream). Opt-in only; avoid on free hosts."""
     try:
         import camelot
     except ImportError:
         logger.debug("camelot not available for fallback")
         return []
 
-    if total_pages <= 0:
-        # Unknown page count — try a single "all" pass as last resort.
-        total_pages = 1
-        batches = ["all"]
-    else:
-        batches = _page_batches(total_pages, camelot_batch_pages())
-
     frames: list[pd.DataFrame] = []
     for flavor in ("lattice", "stream"):
-        flavor_frames: list[pd.DataFrame] = []
-        for pages_arg in batches:
-            try:
-                tables = camelot.read_pdf(str(path), pages=pages_arg, flavor=flavor)
-            except Exception as exc:
-                logger.debug(
-                    "camelot {} failed on {} pages={}: {}",
-                    flavor,
-                    path.name,
-                    pages_arg,
-                    exc,
-                )
-                continue
-            try:
-                for table in tables:
-                    df = table.df
-                    if df.shape[0] >= 2:
-                        df.columns = df.iloc[0]
-                        df = df.iloc[1:].reset_index(drop=True)
-                        flavor_frames.append(_ensure_unique_columns(df))
-            finally:
-                del tables
-                gc.collect()
-        if flavor_frames:
+        try:
+            tables = camelot.read_pdf(str(path), pages="all", flavor=flavor)
+        except Exception as exc:
+            logger.debug("camelot {} failed on {}: {}", flavor, path.name, exc)
+            continue
+        for table in tables:
+            df = table.df
+            if df.shape[0] >= 2:
+                df.columns = df.iloc[0]
+                df = df.iloc[1:].reset_index(drop=True)
+                frames.append(_ensure_unique_columns(df))
+        if frames:
             logger.info(
-                "camelot ({}) extracted {} table(s) from {} (batched)",
+                "camelot ({}) extracted {} table(s) from {}",
                 flavor,
-                len(flavor_frames),
+                len(frames),
                 path.name,
             )
-            frames = flavor_frames
             break
     return frames
+
+
+def parse_statement_text(text: str) -> pd.DataFrame | None:
+    """Parse bank-statement text lines into a transaction table.
+
+    Many Indian bank PDFs (including SBI) expose a text layer but no grid tables,
+    so pdfplumber ``extract_tables`` returns nothing. This fallback keeps ingest
+    working without camelot/OpenCV.
+    """
+    if not text or not text.strip():
+        return None
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    rows: list[dict[str, str]] = []
+    for line in lines:
+        parsed = _parse_text_transaction_line(line)
+        if parsed is not None:
+            rows.append(parsed)
+
+    if not rows:
+        return None
+
+    return pd.DataFrame(rows, columns=["Txn Date", "Description", "Debit", "Credit", "Balance"])
+
+
+def _parse_text_transaction_line(line: str) -> dict[str, str] | None:
+    match = _DATE_LINE_RE.match(line)
+    if match is None:
+        return None
+
+    date = match.group("date")
+    tokens = match.group("rest").split()
+    if len(tokens) < 2:
+        return None
+
+    amounts: list[str] = []
+    while tokens and _AMOUNT_TOKEN_RE.match(tokens[-1].replace(",", "")):
+        amounts.insert(0, tokens.pop())
+    if not amounts:
+        return None
+
+    description = " ".join(tokens).strip()
+    if not description:
+        return None
+    # Skip repeated header-like lines that begin with a date-looking token poorly.
+    lower_desc = description.lower()
+    if "debit" in lower_desc and "credit" in lower_desc:
+        return None
+
+    debit = ""
+    credit = ""
+    balance = ""
+
+    if len(amounts) >= 3:
+        debit, credit, balance = amounts[-3], amounts[-2], amounts[-1]
+        if debit in {"", "-"}:
+            debit = ""
+        if credit in {"", "-"}:
+            credit = ""
+    elif len(amounts) == 2:
+        amount, balance = amounts[0], amounts[1]
+        if any(hint in lower_desc for hint in _CREDIT_HINTS):
+            credit = amount
+        else:
+            debit = amount
+    else:
+        amount = amounts[0]
+        if any(hint in lower_desc for hint in _CREDIT_HINTS):
+            credit = amount
+        else:
+            debit = amount
+
+    return {
+        "Txn Date": date,
+        "Description": description,
+        "Debit": debit,
+        "Credit": credit,
+        "Balance": balance,
+    }
 
 
 def _unique_column_names(columns: list[object] | pd.Index) -> list[str]:
