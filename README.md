@@ -130,13 +130,6 @@ alembic upgrade head        # apply migrations
 alembic revision --autogenerate -m "change"   # create a new migration
 ```
 
-## Deployment (Hugging Face Spaces — free)
-
-Hosted on **Hugging Face Spaces** free Docker CPU (no Render/Koyeb). Step-by-step: [`deploy/huggingface-spaces.md`](deploy/huggingface-spaces.md).
-
-1. Create a Space at https://huggingface.co/new-space → SDK **Docker**, hardware **CPU Basic** (free).
-2. Upload/sync this repo into the Space (or connect the GitHub remote). The YAML block at the top of this README sets `sdk: docker` and `app_port: 7860`.
-3. Wait for the Docker build. Open the Space URL — UI at `/`, health at `/health`, docs at `/docs`.
 
 Optional env / secrets in Space settings:
 
