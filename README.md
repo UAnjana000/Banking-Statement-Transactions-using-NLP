@@ -1,13 +1,4 @@
----
-title: FinUnderWrite
-emoji: 📈
-colorFrom: green
-colorTo: yellow
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
-short_description: Bank statement intelligence for underwriting
+
 ---
 
 # FinUnderWrite
@@ -163,18 +154,4 @@ Notes:
 - Free Spaces sleep when idle; first request after sleep is a cold start.
 - Offline vs serving split unchanged: OCR / training / synth stay offline; the Space serves CSV/native PDF ingest + profiles.
 
-## Build Log
 
-<!-- Newest entries first -->
-
-### 2026-07-17 — deploy: Switch hosting to free Hugging Face Spaces Docker (port 7860, UID 1000); drop Render/Koyeb
-### 2026-07-17 — deploy: Switch hosting from Render to Koyeb (Dockerfile + CLI init script, health check /health)
-### 2026-07-17 — web_ui: Polish FinUnderWrite dashboard (Newsreader/Outfit, ledger atmosphere, motion); ignore .cursor; title-only commit hygiene
-### 2026-07-17 — web_ui/api/parser: Brand FinUnderWrite; 50 MB upload cap with MB-threshold errors; PDF concat hardened for duplicate camelot columns; Windows temp cleanup no longer masks ingest errors
-### 2026-07-17 — web_ui: Static dashboard at `/` (upload, ledger, profile, features) served by FastAPI; gitignore hardened against venv/PII
-### 2026-07-17 - api/deploy: Lightweight FastAPI service (health/statements/transactions/profile/features/synthetic), Alembic migrations, Postgres/DuckDB persistence, Dockerfile + Koyeb deploy, request-id logging, env validation, coverage gate
-### 2026-07-17 - features/synthetic: Deterministic underwriting feature table and offline-only synthetic generation (GaussianCopula/CTGAN/TVAE) with import guard, fidelity + NN-distance privacy checks, requirements-ml.txt split
-### 2026-07-17 - behaviour/profile: Deterministic behaviour summary, recurring detection (cadence clustering), and FinancialProfile builder with known-pattern synthetic fixtures
-### 2026-07-17 - merchant: Merchant extraction, hybrid categorization (rules+sklearn, optional LLM), and defensive cache-first enrichment with SQLAlchemy persistence
-### 2026-07-17 - persistence: SQLAlchemy 2.0 layer with enrichment cache/queue and LLM category cache
-### 2026-07-17 - scaffold: Initial pipeline (inventory -> parser -> schema -> normalize) with synthetic fixtures and unit tests
